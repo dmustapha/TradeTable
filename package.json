@@ -1,0 +1,33 @@
+{
+  "// File:": "package.json",
+  "name": "tradetable",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "anchor test --skip-local-validator",
+    "seed": "tsx scripts/ops.ts seed",
+    "measure": "tsx scripts/ops.ts measure",
+    "prove": "tsx scripts/ops.ts prove"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@magicblock-labs/ephemeral-rollups-sdk": "0.16.2",
+    "@noble/hashes": "1.8.0",
+    "@solana/spl-token": "0.4.14",
+    "@solana/web3.js": "1.98.4",
+    "next": "15.4.6",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.2.1",
+    "@types/react": "19.1.10",
+    "@types/react-dom": "19.1.7",
+    "tsx": "4.20.3",
+    "typescript": "5.9.2"
+  }
+}
