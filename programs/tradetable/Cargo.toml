@@ -1,0 +1,23 @@
+# File: programs/tradetable/Cargo.toml
+[package]
+name = "tradetable"
+version = "0.1.0"
+description = "Three-party live barter with base-layer recoverable custody"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "tradetable"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "=0.32.1", features = ["init-if-needed"] }
+anchor-spl = { version = "=0.32.1", features = ["associated_token", "token"] }
+ephemeral-rollups-sdk = { version = "=0.16.2", features = ["anchor-compat"] }
