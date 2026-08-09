@@ -340,6 +340,112 @@ async function stateSuite(namespace: string): Promise<void> {
   process.stdout.write(JSON.stringify({core: core.toBase58(), live: live.toBase58(), revision: 2, lockMask: 7, phase: "finalizing"}));
 }
 
+type SettlementFixture = {
+  provider: AnchorProvider; program: any; erProgram: any; core: PublicKey; live: PublicKey;
+  participants: Keypair[]; assets: Array<{mint: PublicKey; ata: PublicKey}>;
+  destinations: PublicKey[]; selected: [number, number, number];
+};
+
+async function prepareSettlement(namespace: string, createAllDestinations: boolean): Promise<SettlementFixture> {
+  const {provider, program} = anchorProgram();
+  const payer = (provider.wallet as AnchorProvider["wallet"] & {payer: Keypair}).payer;
+  const participants = [payer, fixtureKey(namespace, "participant-1"), fixtureKey(namespace, "participant-2")];
+  await Promise.all(participants.slice(1).map(value => fund(provider, value.publicKey)));
+  const nonce = BigInt(`0x${createHash("sha256").update(namespace).digest("hex").slice(0, 14)}`);
+  const [core] = roomPda(payer.publicKey, nonce);
+  const [live] = livePda(core);
+  const expiry = Math.floor(Date.now() / 1000) + 3_600;
+  await program.methods.initializeRoom(new BN(nonce.toString()), participants.map(value => value.publicKey), new BN(expiry)).accounts({creator: payer.publicKey, roomCore: core, roomLive: live}).rpc();
+  const assets = [] as Array<{mint: PublicKey; ata: PublicKey}>;
+  for (let slot = 0; slot < 6; slot += 1) {
+    const owner = participants[Math.floor(slot / 2)];
+    const asset = await immutableAsset(provider, owner, fixtureKey(namespace, `mint-${slot}`));
+    assets.push(asset);
+    await program.methods.depositAsset(slot).accounts({participant: owner.publicKey, roomCore: core, mint: asset.mint, source: asset.ata, vault: vaultAta(core, asset.mint)}).signers(owner === payer ? [] : [owner]).rpc();
+  }
+  const selected: [number, number, number] = [0, 2, 4];
+  const recipients = [participants[1], participants[2], participants[0]];
+  const destinations = [] as PublicKey[];
+  for (let leg = 0; leg < 3; leg += 1) {
+    const canonical = destinationAta(recipients[leg].publicKey, assets[selected[leg]].mint);
+    destinations.push(canonical);
+    if (createAllDestinations || leg < 2) await getOrCreateAssociatedTokenAccount(provider.connection, payer, assets[selected[leg]].mint, recipients[leg].publicKey);
+  }
+  const localValidator = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
+  await program.methods.activateAndDelegateLive().accounts({participant: payer.publicKey, roomCore: core, roomLive: live}).remainingAccounts([{pubkey: localValidator, isSigner: false, isWritable: false}]).rpc();
+  const erProvider = new AnchorProvider(new Connection("http://127.0.0.1:7799", "confirmed"), provider.wallet, provider.opts);
+  const erProgram = new Program(program.idl, erProvider) as any;
+  await waitForLive(erProgram, live);
+  await erProgram.methods.propose(new BN(0), selected, {forward: {}}).accounts({actor: payer.publicKey, roomCore: core, roomLive: live}).rpc();
+  const proposed = await erProgram.account.roomLive.fetch(live);
+  const hash = [...proposed.allocationHash];
+  for (let index = 0; index < 3; index += 1) await erProgram.methods.lock(new BN(1), hash).accounts({actor: participants[index].publicKey, roomCore: core, roomLive: live}).signers(index === 0 ? [] : [participants[index]]).rpc();
+  return {provider, program, erProgram, core, live, participants, assets, destinations, selected};
+}
+
+function settlementAccounts(fixture: SettlementFixture) {
+  const {provider, core, live, assets, destinations, selected} = fixture;
+  const [vaultAuthority] = vaultAuthorityPda(core);
+  return {
+    payer: provider.wallet.publicKey, roomCore: core, roomLive: live, vaultAuthority,
+    mint0: assets[selected[0]].mint, vault0: vaultAta(core, assets[selected[0]].mint), destination0: destinations[0],
+    mint1: assets[selected[1]].mint, vault1: vaultAta(core, assets[selected[1]].mint), destination1: destinations[1],
+    mint2: assets[selected[2]].mint, vault2: vaultAta(core, assets[selected[2]].mint), destination2: destinations[2],
+  };
+}
+
+async function waitForSettled(fixture: SettlementFixture): Promise<any> {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const state = await fixture.program.account.roomCore.fetch(fixture.core) as any;
+    if (state.status.settled !== undefined) return state;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return fixture.program.account.roomCore.fetch(fixture.core);
+}
+
+async function assertSelectedTransfers(fixture: SettlementFixture): Promise<void> {
+  const coreState = await waitForSettled(fixture);
+  assert.equal(coreState.selectedMask, 21);
+  assert.equal(coreState.settledRevision.toNumber(), 1);
+  for (let leg = 0; leg < 3; leg += 1) {
+    assert.equal((await waitForTokenAmount(fixture.provider, vaultAta(fixture.core, fixture.assets[fixture.selected[leg]].mint), 0n)).amount, 0n);
+    assert.equal((await waitForTokenAmount(fixture.provider, fixture.destinations[leg], 1n)).amount, 1n);
+  }
+}
+
+async function actionSettlementSuite(namespace: string): Promise<void> {
+  const failure = await prepareSettlement(`${namespace}-failure`, false);
+  const failureSignature = await failure.erProgram.methods.finalize().accounts(settlementAccounts(failure)).rpc();
+  await new Promise(resolve => setTimeout(resolve, 1_000));
+  const unchanged = await failure.program.account.roomCore.fetch(failure.core) as any;
+  assert.equal(unchanged.status.active !== undefined, true);
+  assert.equal(unchanged.selectedMask, 0);
+  for (const slot of failure.selected) assert.equal((await getAccount(failure.provider.connection, vaultAta(failure.core, failure.assets[slot].mint), "confirmed")).amount, 1n);
+  process.stdout.write("PASS failed asynchronous intent leaves all three custody legs unchanged\n");
+  const fixture = await prepareSettlement(`${namespace}-success`, true);
+  const signature = await fixture.erProgram.methods.finalize().accounts(settlementAccounts(fixture)).rpc();
+  await assertSelectedTransfers(fixture);
+  process.stdout.write("PASS composed Magic Action settles exactly three selected assets\n");
+  process.stdout.write(JSON.stringify({failureSignature, signature, core: fixture.core.toBase58(), live: fixture.live.toBase58(), selectedMask: 21, revision: 1}));
+}
+
+async function fallbackSettlementSuite(namespace: string): Promise<void> {
+  const fixture = await prepareSettlement(namespace, true);
+  const commitSignature = await fixture.erProgram.methods.finalizeCommitOnly().accounts({payer: fixture.provider.wallet.publicKey, roomCore: fixture.core, roomLive: fixture.live}).rpc();
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const owner = (await fixture.provider.connection.getAccountInfo(fixture.live, "confirmed"))?.owner;
+    if (owner?.equals(programId())) break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  const before = await fixture.program.account.roomCore.fetch(fixture.core) as any;
+  assert.equal(before.status.active !== undefined, true);
+  for (const slot of fixture.selected) assert.equal((await getAccount(fixture.provider.connection, vaultAta(fixture.core, fixture.assets[slot].mint), "confirmed")).amount, 1n);
+  const settlementSignature = await fixture.program.methods.settleCommitted().accounts({caller: fixture.provider.wallet.publicKey, ...settlementAccounts(fixture)}).rpc();
+  await assertSelectedTransfers(fixture);
+  process.stdout.write("PASS commit-only finalization reaches normal base settlement fallback\n");
+  process.stdout.write(JSON.stringify({commitSignature, settlementSignature, core: fixture.core.toBase58(), selectedMask: 21}));
+}
+
 async function seedOnly(namespace: string): Promise<void> {
   const {provider, program} = anchorProgram();
   const nonce = BigInt(`0x${createHash("sha256").update(namespace).digest("hex").slice(0, 14)}`);
@@ -383,7 +489,13 @@ async function seedOnly(namespace: string): Promise<void> {
 const seedIndex = process.argv.indexOf("--seed-only");
 const custodyIndex = process.argv.indexOf("--custody-suite");
 const stateIndex = process.argv.indexOf("--state-suite");
-const execution = stateIndex >= 0
+const actionIndex = process.argv.indexOf("--action-settlement-suite");
+const fallbackIndex = process.argv.indexOf("--fallback-settlement-suite");
+const execution = actionIndex >= 0
+  ? actionSettlementSuite(process.argv[actionIndex + 1] ?? `action-${Date.now()}`)
+  : fallbackIndex >= 0
+  ? fallbackSettlementSuite(process.argv[fallbackIndex + 1] ?? `fallback-${Date.now()}`)
+  : stateIndex >= 0
   ? stateSuite(process.argv[stateIndex + 1] ?? `state-${Date.now()}`)
   : custodyIndex >= 0
   ? custodySuite(process.argv[custodyIndex + 1] ?? `custody-${Date.now()}`)
