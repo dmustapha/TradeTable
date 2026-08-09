@@ -126,17 +126,19 @@ async function prove(): Promise<void> {
   const returnSignatures = requireEnv("RETURN_SIGNATURES").split(",").filter(Boolean);
   if (returnSignatures.length !== 3) throw new Error("RETURN_SIGNATURES must contain exactly three signatures");
   const measurements = JSON.parse(readFileSync(requireEnv("MEASUREMENT_OUTPUT_JSON"), "utf8")) as Record<string, {wireBytes: number; budgetWithMargin: number}>;
-  const [programInfo, roomInfo, liveInfo, commitTransaction, transactions, settlement] = await withTimeout(Promise.all([
-    connection.getAccountInfo(program, "confirmed"), connection.getAccountInfo(room, "confirmed"), connection.getAccountInfo(live, "confirmed"),
-    erConnection.getTransaction(commitSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}),
-    Promise.all([...new Set([...signatures, settlementSignature, ...returnSignatures])].map(signature => connection.getTransaction(signature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}))),
-    connection.getParsedTransaction(settlementSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}),
-  ]), 45_000, "public proof read-back");
+  const programInfo = await withTimeout(connection.getAccountInfo(program, "confirmed"), 45_000, "program proof read");
+  const roomInfo = await withTimeout(connection.getAccountInfo(room, "confirmed"), 45_000, "room proof read");
+  const liveInfo = await withTimeout(connection.getAccountInfo(live, "confirmed"), 45_000, "live proof read");
+  const commitTransaction = await withTimeout(erConnection.getTransaction(commitSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}), 45_000, "commit proof read");
+  const settlement = await withTimeout(connection.getParsedTransaction(settlementSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}), 45_000, "settlement proof read");
+  const returns = [];
+  for (const signature of returnSignatures) returns.push(await withTimeout(connection.getParsedTransaction(signature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}), 45_000, "return proof read"));
+  const transactions = [];
+  for (const signature of signatures) transactions.push(await withTimeout(connection.getTransaction(signature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}), 45_000, "additional proof read"));
   if (!programInfo?.executable || !roomInfo || !liveInfo || !commitTransaction || commitTransaction.meta?.err || transactions.some(value => !value || value.meta?.err) || !settlement || settlement.meta?.err) throw new Error("proof read-back failed");
   if (!commitTransaction.meta?.logMessages?.includes("Program log: Instruction: FinalizeCommitOnly") || !commitTransaction.meta.logMessages.some(line => line === `Program ${program.toBase58()} invoke [1]`)) throw new Error("commit signature is not the exact deployed finalize_commit_only instruction");
   const {core, liveState} = validateRoomLinkage(program, room, live, roomInfo, liveInfo);
   validateSettlementInstruction(settlement, program, room, live, core, liveState);
-  const returns = await withTimeout(Promise.all(returnSignatures.map(value => connection.getParsedTransaction(value, {commitment: "confirmed", maxSupportedTransactionVersion: 0}))), 30_000, "return proof reads");
   if (returns.some(value => !value || changedTokenAccounts(value as any) !== 2)) throw new Error("each return must change exactly one vault and one owner balance");
   if (!measurements.commitOnlyDevnet || !measurements.normalSettlementDevnet || Object.values(measurements).some(value => value.wireBytes > 1_232 || value.budgetWithMargin > 1_400_000)) throw new Error("public measurement report failed proof ceilings or evidence boundary");
   const lines = ["# TradeTable Devnet Proof", "", "## PUBLIC DEVNET EVIDENCE BOUNDARY", "", "Public proof is commit-only ER finalization followed by a separate base settlement. Local composed-action evidence is not claimed as public Devnet evidence.", "", `- Program: ${explorerAddress(program)}`, `- RoomCore: ${explorerAddress(room)}`, `- RoomLive: ${explorerAddress(live)}`, `- Commit-only ER: ${commitSignature} (confirmed through ${ER_RPC})`, `- Settlement: ${explorerTx(settlementSignature)} (exact settle_committed; 3 transferChecked instructions; amount 1; decimals 0; selectedMask ${core.selectedMask})`, ...returnSignatures.map(value => `- Return: ${explorerTx(value)} (separate one-asset base transaction)`), ...signatures.map(value => `- Transaction: ${explorerTx(value)}`), `- Measurements: ${JSON.stringify(measurements)}`, ""];
