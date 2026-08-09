@@ -1,4 +1,3 @@
-# File: Anchor.toml
 [toolchain]
 anchor_version = "0.32.1"
 
@@ -6,17 +5,17 @@ anchor_version = "0.32.1"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-tradetable = "11111111111111111111111111111111"
-
 [programs.devnet]
-tradetable = "11111111111111111111111111111111"
+tradetable = "FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3"
+
+[programs.localnet]
+tradetable = "FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
