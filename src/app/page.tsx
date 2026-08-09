@@ -7,7 +7,7 @@ import {
 import RoomClient from "./room-client";
 
 type Mode = "action" | "committed" | "recover";
-type LocatedAccount = {value: NonNullable<Awaited<ReturnType<Connection["getAccountInfo"]>>>; source: string; refreshedAt: number};
+type LocatedAccount = {value: NonNullable<Awaited<ReturnType<Connection["getAccountInfo"]>>>; source: string; connection: Connection; refreshedAt: number};
 
 function key(value: string | undefined): PublicKey | null {
   try { return value ? new PublicKey(value) : null; } catch { return null; }
@@ -18,7 +18,7 @@ async function firstAccount(address: PublicKey | null, sources: Array<[string, C
   for (const [source, connection] of sources) {
     try {
       const value = await withTimeout(connection.getAccountInfo(address, "confirmed"), 10_000, `${source} account read`);
-      if (value) return {value, source, refreshedAt: Date.now()};
+      if (value) return {value, source, connection, refreshedAt: Date.now()};
     } catch {}
   }
   return null;
@@ -53,14 +53,15 @@ export default async function Home({searchParams}: {searchParams: Promise<{mode?
   const coreResult = await firstAccount(room, baseSources);
   const baseLiveResult = await firstAccount(live, baseSources);
   const delegated = Boolean(baseLiveResult?.value.owner.equals(DELEGATION_PROGRAM_ID));
-  const delegation = delegated && live ? await withTimeout(getDelegationRecord(base, live, "confirmed"), 10_000, "delegation read").catch(() => null) : null;
+  const delegation = delegated && live ? await withTimeout(getDelegationRecord(baseLiveResult?.connection ?? base, live, "confirmed"), 10_000, "delegation read").catch(() => null) : null;
   const delegatedSources: Array<[string, Connection]> = [["router", router]];
   if (delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR)) delegatedSources.push(["direct ER", er]);
   const liveResult = delegated ? await firstAccount(live, delegatedSources) : baseLiveResult;
   const core = decodeCore(coreResult?.value.data);
   const liveState = decodeLive(liveResult?.value.data);
-  const mintInfos = core ? await withTimeout(base.getMultipleAccountsInfo(core.mints, "confirmed"), 10_000, "mint reads").catch(() => []) : [];
-  const signatures = room ? await withTimeout(base.getSignaturesForAddress(room, {limit: 8}, "confirmed"), 10_000, "signature reads").catch(() => []) : [];
+  const baseReader = coreResult?.connection ?? base;
+  const mintInfos = core ? await withTimeout(baseReader.getMultipleAccountsInfo(core.mints, "confirmed"), 10_000, "mint reads").catch(() => []) : [];
+  const signatures = room ? await withTimeout(baseReader.getSignaturesForAddress(room, {limit: 8}, "confirmed"), 10_000, "signature reads").catch(() => []) : [];
   const requested = (await searchParams).mode;
   const mode: Mode = requested === "committed" || requested === "recover" ? requested : "action";
   const seats = core?.participants ?? [];

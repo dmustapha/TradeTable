@@ -21,7 +21,7 @@ export function programId(): PublicKey {
 }
 
 export type Cycle = "forward" | "reverse";
-export type AuthoritySource = "base-ws" | "base-poll" | "router-ws" | "router-poll" | "er-ws" | "er-poll";
+export type AuthoritySource = "base-ws" | "base-poll" | "base-fallback-poll" | "router-ws" | "router-poll" | "er-ws" | "er-poll";
 export type LiveProjection = { revision: bigint; allocationHash: Uint8Array; lockMask: number; phase: string; source: AuthoritySource; observedAt: number };
 export type SourceWatermarks = Record<AuthoritySource, number>;
 export type ProposalPending = {kind: "propose"; actorIndex: number; revision: bigint; slots: [number, number, number]; cycle: Cycle; allocationHash: number[]};
@@ -61,7 +61,9 @@ export async function primaryThenFallback<T>(primary: () => Promise<T | null>, f
   return fallback ? fallback() : null;
 }
 
-export const emptyWatermarks = (): SourceWatermarks => ({"base-ws": 0, "base-poll": 0, "router-ws": 0, "router-poll": 0, "er-ws": 0, "er-poll": 0});
+export const emptyWatermarks = (): SourceWatermarks => ({"base-ws": 0, "base-poll": 0, "base-fallback-poll": 0, "router-ws": 0, "router-poll": 0, "er-ws": 0, "er-poll": 0});
+
+export const basePollSource = (usingFallback: boolean): AuthoritySource => usingFallback ? "base-fallback-poll" : "base-poll";
 
 export function acceptSourceSlot(watermarks: SourceWatermarks, source: AuthoritySource, slot: number): boolean {
   if (slot < watermarks[source]) return false;
@@ -70,7 +72,7 @@ export function acceptSourceSlot(watermarks: SourceWatermarks, source: Authority
 }
 
 export function liveSourceIsAuthoritative(source: AuthoritySource, delegated: boolean, directValidator: boolean): boolean {
-  if (!delegated) return source === "base-ws" || source === "base-poll";
+  if (!delegated) return source === "base-ws" || source === "base-poll" || source === "base-fallback-poll";
   if (source === "router-ws" || source === "router-poll") return true;
   return directValidator && (source === "er-ws" || source === "er-poll");
 }
@@ -271,8 +273,9 @@ export function subscribeAuthoritative(
     }
     delegated = Boolean(baseLiveResult.value?.owner.equals(DELEGATION_PROGRAM_ID) && delegation?.status === 0);
     directValidator = Boolean(delegated && delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR));
-    if (coreResult.value) publishCore(coreResult.value.data, "base-poll", coreResult.context.slot);
-    if (!delegated && baseLiveResult.value) publishLive(baseLiveResult.value.data, "base-poll", baseLiveResult.context.slot);
+    const baseSource = basePollSource(Boolean(baseFallback && baseValues.reader === baseFallback));
+    if (coreResult.value) publishCore(coreResult.value.data, baseSource, coreResult.context.slot);
+    if (!delegated && baseLiveResult.value) publishLive(baseLiveResult.value.data, baseSource, baseLiveResult.context.slot);
     if (delegated) {
       const connection = directValidator ? er : router;
       const result = await withTimeout(connection.getAccountInfoAndContext(live, "confirmed"), 10_000, "live authority poll").catch(() => null);
