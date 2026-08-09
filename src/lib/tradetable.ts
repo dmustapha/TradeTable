@@ -24,6 +24,42 @@ export type Cycle = "forward" | "reverse";
 export type AuthoritySource = "base-ws" | "base-poll" | "router-ws" | "router-poll" | "er-ws" | "er-poll";
 export type LiveProjection = { revision: bigint; allocationHash: Uint8Array; lockMask: number; phase: string; source: AuthoritySource; observedAt: number };
 export type SourceWatermarks = Record<AuthoritySource, number>;
+export type ProposalPending = {kind: "propose"; actorIndex: number; revision: bigint; slots: [number, number, number]; cycle: Cycle; allocationHash: number[]};
+export type LockPending = {kind: "lock"; actorIndex: number; revision: bigint; allocationHash: number[]};
+export type PendingPostcondition = ProposalPending | LockPending;
+export type PostconditionView = {revision: bigint; selectedSlots: [number, number, number]; cycle: Cycle; allocationHash: number[]; lockMask: number; lockedRevision: bigint[]; lockedHash: number[][]};
+
+const equalBytes = (left: number[], right: number[]) => left.length === right.length && left.every((value, index) => value === right[index]);
+
+export function selectedSlotsFromChoices(choices: [number, number, number]): [number, number, number] {
+  if (choices.some(choice => choice !== 0 && choice !== 1)) throw new Error("each owner choice must be zero or one");
+  return choices.map((choice, owner) => owner * 2 + choice) as [number, number, number];
+}
+
+export function pendingPostconditionMet(pending: PendingPostcondition, view: PostconditionView): boolean {
+  if (view.revision !== pending.revision || !equalBytes(view.allocationHash, pending.allocationHash)) return false;
+  if (pending.kind === "propose") return view.cycle === pending.cycle && view.selectedSlots.every((slot, index) => slot === pending.slots[index]);
+  const bit = 1 << pending.actorIndex;
+  return Boolean(view.lockMask & bit) && view.lockedRevision[pending.actorIndex] === pending.revision
+    && equalBytes(view.lockedHash[pending.actorIndex], pending.allocationHash);
+}
+
+export function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+  });
+}
+
+export async function primaryThenFallback<T>(primary: () => Promise<T | null>, fallback?: () => Promise<T | null>): Promise<T | null> {
+  try {
+    const value = await primary();
+    if (value !== null) return value;
+  } catch (error) {
+    if (!fallback) throw error;
+  }
+  return fallback ? fallback() : null;
+}
 
 export const emptyWatermarks = (): SourceWatermarks => ({"base-ws": 0, "base-poll": 0, "router-ws": 0, "router-poll": 0, "er-ws": 0, "er-poll": 0});
 
@@ -138,6 +174,7 @@ async function accountAwareRouterBlockhash(instruction: TransactionInstruction):
     method: "POST",
     headers: {"content-type": "application/json"},
     body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "getBlockhashForAccounts", params: [writable]}),
+    signal: AbortSignal.timeout(10_000),
   });
   const payload = await response.json() as {result?: {blockhash?: string}; error?: unknown};
   if (!response.ok || !payload.result?.blockhash) throw new Error(`router blockhash failed: ${JSON.stringify(payload.error)}`);
@@ -151,9 +188,9 @@ export async function sendBase(connection: Connection, wallet: Wallet, instructi
     try {
       const transaction = new Transaction().add(instruction);
       transaction.feePayer = wallet.publicKey;
-      transaction.recentBlockhash = (await endpoint.getLatestBlockhash("confirmed")).blockhash;
+      transaction.recentBlockhash = (await withTimeout(endpoint.getLatestBlockhash("confirmed"), 10_000, "base blockhash read")).blockhash;
       const signed = await wallet.signTransaction(transaction);
-      return await endpoint.sendRawTransaction(signed.serialize(), {skipPreflight: false});
+      return await withTimeout(endpoint.sendRawTransaction(signed.serialize(), {skipPreflight: false}), 20_000, "base transaction send");
     } catch (error) { lastError = error; }
   }
   throw lastError;
@@ -162,19 +199,25 @@ export async function sendBase(connection: Connection, wallet: Wallet, instructi
 export async function sendErWithFallback(wallet: Wallet, instruction: TransactionInstruction): Promise<string> {
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = wallet.publicKey;
+  let routerFailure: unknown;
   try {
-    const router = routerConnection();
     transaction.recentBlockhash = await accountAwareRouterBlockhash(instruction);
-    const signed = await wallet.signTransaction(transaction);
-    return router.sendRawTransaction(signed.serialize(), {skipPreflight: true});
-  } catch (routerError) {
-    const er = directErConnection();
-    transaction.recentBlockhash = (await er.getLatestBlockhash("confirmed")).blockhash;
-    const signed = await wallet.signTransaction(transaction);
-    const signature = await er.sendRawTransaction(signed.serialize(), {skipPreflight: true});
-    console.warn("router send failed; direct ER used", routerError);
-    return signature;
-  }
+  } catch (error) { return sendDirectEr(wallet, instruction, error); }
+  const signed = await wallet.signTransaction(transaction);
+  try { return await withTimeout(routerConnection().sendRawTransaction(signed.serialize(), {skipPreflight: true}), 20_000, "router transaction send"); }
+  catch (error) { routerFailure = error; }
+  return sendDirectEr(wallet, instruction, routerFailure);
+}
+
+async function sendDirectEr(wallet: Wallet, instruction: TransactionInstruction, routerError: unknown): Promise<string> {
+  const er = directErConnection();
+  const transaction = new Transaction().add(instruction);
+  transaction.feePayer = wallet.publicKey;
+  transaction.recentBlockhash = (await withTimeout(er.getLatestBlockhash("confirmed"), 10_000, "direct ER blockhash read")).blockhash;
+  const signed = await wallet.signTransaction(transaction);
+  const signature = await withTimeout(er.sendRawTransaction(signed.serialize(), {skipPreflight: true}), 20_000, "direct ER transaction send");
+  console.warn("router send failed; direct ER used", routerError);
+  return signature;
 }
 
 export function subscribeAuthoritative(
@@ -189,11 +232,13 @@ export function subscribeAuthoritative(
   const er = directErConnection();
   const coreWatermarks = emptyWatermarks();
   const liveWatermarks = emptyWatermarks();
+  let active = true;
   let delegated = false;
   let directValidator = false;
-  const publishCore = (data: Buffer, source: AuthoritySource, slot: number) => { if (acceptSourceSlot(coreWatermarks, source, slot)) onCore(data, source); };
+  let pollFailureReported = false;
+  const publishCore = (data: Buffer, source: AuthoritySource, slot: number) => { if (active && acceptSourceSlot(coreWatermarks, source, slot)) onCore(data, source); };
   const publishLive = (data: Buffer, source: AuthoritySource, slot: number) => {
-    if (liveSourceIsAuthoritative(source, delegated, directValidator) && acceptSourceSlot(liveWatermarks, source, slot)) onLive(data, source);
+    if (active && liveSourceIsAuthoritative(source, delegated, directValidator) && acceptSourceSlot(liveWatermarks, source, slot)) onLive(data, source);
   };
   const baseCoreId = base.onAccountChange(core, (value, context) => publishCore(value.data, "base-ws", context.slot), "confirmed");
   const baseLiveId = base.onAccountChange(live, (value, context) => {
@@ -202,26 +247,47 @@ export function subscribeAuthoritative(
   }, "confirmed");
   const routerLiveId = router.onAccountChange(live, (value, context) => publishLive(value.data, "router-ws", context.slot), "confirmed");
   const erLiveId = er.onAccountChange(live, (value, context) => publishLive(value.data, "er-ws", context.slot), "confirmed");
-  const pollId = setInterval(async () => {
-    const baseReader = baseFallback ?? base;
-    const [coreResult, baseLiveResult, delegation] = await Promise.all([
-      baseReader.getAccountInfoAndContext(core, "confirmed"),
-      baseReader.getAccountInfoAndContext(live, "confirmed"),
-      getDelegationRecord(baseReader, live, "confirmed").catch(() => null),
-    ]);
+  const readBase = async (reader: Connection) => {
+    const values = await withTimeout(Promise.all([
+      reader.getAccountInfoAndContext(core, "confirmed"),
+      reader.getAccountInfoAndContext(live, "confirmed"),
+    ]), 10_000, "base authority poll");
+    return values.every(value => value.value) ? {reader, values} : null;
+  };
+  const poll = async () => {
+    const primary = () => readBase(base);
+    const fallback = baseFallback ? () => readBase(baseFallback) : undefined;
+    let baseValues = await primaryThenFallback(primary, fallback);
+    if (!baseValues) throw new Error("base authority accounts unavailable");
+    let [coreResult, baseLiveResult] = baseValues.values;
+    let delegation = await withTimeout(getDelegationRecord(baseValues.reader, live, "confirmed"), 10_000, "delegation read").catch(() => null);
+    if (baseLiveResult.value?.owner.equals(DELEGATION_PROGRAM_ID) && !delegation && baseFallback && baseValues.reader === base) {
+      const recovered = await readBase(baseFallback);
+      if (recovered) {
+        baseValues = recovered;
+        [coreResult, baseLiveResult] = recovered.values;
+        delegation = await withTimeout(getDelegationRecord(baseFallback, live, "confirmed"), 10_000, "fallback delegation read").catch(() => null);
+      }
+    }
     delegated = Boolean(baseLiveResult.value?.owner.equals(DELEGATION_PROGRAM_ID) && delegation?.status === 0);
     directValidator = Boolean(delegated && delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR));
     if (coreResult.value) publishCore(coreResult.value.data, "base-poll", coreResult.context.slot);
     if (!delegated && baseLiveResult.value) publishLive(baseLiveResult.value.data, "base-poll", baseLiveResult.context.slot);
     if (delegated) {
       const connection = directValidator ? er : router;
-      const result = await connection.getAccountInfoAndContext(live, "confirmed").catch(() => null);
+      const result = await withTimeout(connection.getAccountInfoAndContext(live, "confirmed"), 10_000, "live authority poll").catch(() => null);
       if (result?.value) publishLive(result.value.data, directValidator ? "er-poll" : "router-poll", result.context.slot);
     }
-  }, 1_000);
+    pollFailureReported = false;
+  };
+  const pollId = setInterval(() => { void poll().catch(error => {
+    if (!pollFailureReported) console.warn("authority poll failed; projection will become stale", error);
+    pollFailureReported = true;
+  }); }, 1_000);
   return async () => {
+    active = false;
     clearInterval(pollId);
-    await Promise.all([base.removeAccountChangeListener(baseCoreId), base.removeAccountChangeListener(baseLiveId), router.removeAccountChangeListener(routerLiveId), er.removeAccountChangeListener(erLiveId)]);
+    await Promise.allSettled([base.removeAccountChangeListener(baseCoreId), base.removeAccountChangeListener(baseLiveId), router.removeAccountChangeListener(routerLiveId), er.removeAccountChangeListener(erLiveId)]);
   };
 }
 
@@ -229,7 +295,7 @@ export async function waitForBaseSettlement(core: PublicKey, predicate: (data: B
   const connection = baseConnection();
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const value = await connection.getAccountInfo(core, "confirmed");
+    const value = await withTimeout(connection.getAccountInfo(core, "confirmed"), 10_000, "base settlement read");
     if (value && predicate(value.data)) return value.data;
     await new Promise(resolve => setTimeout(resolve, 1_000));
   }
