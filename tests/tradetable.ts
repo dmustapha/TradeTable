@@ -143,7 +143,7 @@ function runBehavioralAssertions(): void {
   process.stdout.write(`TradeTable behavioral harness passed ${behavioralTests.length} checks\n`);
 }
 
-function anchorProgram(): {provider: AnchorProvider; program: Program} {
+function anchorProgram(): {provider: AnchorProvider; program: any} {
   const provider = AnchorProvider.env();
   setProvider(provider);
   return {provider, program: workspace.Tradetable as Program};
