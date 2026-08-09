@@ -43,6 +43,11 @@ export function isProjectionStale(observedAt: number, now = Date.now(), threshol
   return now - observedAt > thresholdMs;
 }
 
+export function isLocalRpcEndpoint(endpoint: string): boolean {
+  const hostname = new URL(endpoint).hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 export function roomPda(creator: PublicKey, nonce: bigint): [PublicKey, number] {
   const value = new Uint8Array(8);
   new DataView(value.buffer).setBigUint64(0, nonce, true);

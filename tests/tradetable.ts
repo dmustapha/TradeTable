@@ -11,6 +11,7 @@ import {
   emptyWatermarks,
   acceptSourceSlot,
   isProjectionStale,
+  isLocalRpcEndpoint,
   liveSourceIsAuthoritative,
   livePda,
   programId,
@@ -138,6 +139,14 @@ const behavioralTests: Test[] = [
     },
   },
   {
+    name: "fixture funding uses faucets only on local RPC endpoints",
+    run: () => {
+      assert.equal(isLocalRpcEndpoint("http://127.0.0.1:8899"), true);
+      assert.equal(isLocalRpcEndpoint("http://localhost:8899"), true);
+      assert.equal(isLocalRpcEndpoint("https://api.devnet.solana.com"), false);
+    },
+  },
+  {
     name: "routing keeps independent source watermarks and delegation authority",
     run: () => {
       const watermarks = emptyWatermarks();
@@ -175,6 +184,7 @@ function anchorProgram(): {provider: AnchorProvider; program: any} {
 }
 
 async function fund(provider: AnchorProvider, wallet: PublicKey): Promise<void> {
+  if (!isLocalRpcEndpoint(provider.connection.rpcEndpoint)) return;
   const signature = await provider.connection.requestAirdrop(wallet, 2 * LAMPORTS_PER_SOL);
   await provider.connection.confirmTransaction(signature, "confirmed");
 }
