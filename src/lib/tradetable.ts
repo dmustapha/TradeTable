@@ -48,6 +48,25 @@ export function isLocalRpcEndpoint(endpoint: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
+export function fixtureFundingLamports(endpoint: string, balance: number): number | null {
+  if (isLocalRpcEndpoint(endpoint)) return null;
+  return Math.max(0, 10_000_000 - balance);
+}
+
+export function seedRoomMissingSlots(depositedMask: number, actualRoster: string[], expectedRoster: string[]): number[] {
+  if (depositedMask < 0 || depositedMask > 63) throw new Error("invalid deposit mask on deterministic room");
+  if (actualRoster.length !== expectedRoster.length || actualRoster.some((value, index) => value !== expectedRoster[index])) throw new Error("existing deterministic room is roster-mismatched");
+  return [0, 1, 2, 3, 4, 5].filter(slot => (depositedMask & (1 << slot)) === 0);
+}
+
+export function immutableMintRecovery(supply: bigint, mintAuthority: PublicKey | null, freezeAuthority: PublicKey | null, payer: PublicKey) {
+  if (supply < 0n || supply > 1n) throw new Error("invalid supply for deterministic mint recovery");
+  if (mintAuthority && !mintAuthority.equals(payer)) throw new Error("foreign mint authority on deterministic fixture");
+  if (freezeAuthority && !freezeAuthority.equals(payer)) throw new Error("foreign freeze authority on deterministic fixture");
+  if (supply === 0n && !mintAuthority) throw new Error("missing mint authority on empty deterministic fixture");
+  return {mint: supply === 0n, revokeMint: Boolean(mintAuthority), revokeFreeze: Boolean(freezeAuthority)};
+}
+
 export function roomPda(creator: PublicKey, nonce: bigint): [PublicKey, number] {
   const value = new Uint8Array(8);
   new DataView(value.buffer).setBigUint64(0, nonce, true);
