@@ -102,11 +102,11 @@ export default function RoomClient({room, participants, mints}: Props) {
     <div><p className="kicker">LIVE COLLABORATION</p><h2>Revision {view?.revision.toString() ?? "—"}</h2><p className={stale ? "stale" : "fresh"}>{stale ? "STALE / WRITES DISABLED" : `${view?.source} · AUTHORITATIVE`}</p></div>
     <div className="controlRail">
       <button type="button" onClick={() => void connect()}>{wallet?.publicKey ? `${wallet.publicKey.toBase58().slice(0, 7)}… CONNECTED` : "CONNECT PRIMARY WALLET"}</button>
-      {choices.map((choice, owner) => <button type="button" disabled={Boolean(pending)} key={owner} onClick={() => setChoices(current => current.map((value, index) => index === owner ? 1 - value : value) as [number, number, number])}>OWNER {owner + 1}: SLOT {owner * 2 + choice} ({mints[owner * 2 + choice]?.slice(0, 7) ?? "UNAVAILABLE"}…)</button>)}
-      <button type="button" title="SET CYCLE: FORWARD / SET CYCLE: REVERSE" disabled={Boolean(pending)} onClick={() => setCycle(current => current === "forward" ? "reverse" : "forward")}>SET CYCLE: {cycle === "forward" ? "FORWARD" : "REVERSE"}</button>
+      {choices.map((choice, owner) => <button aria-pressed={choice === 1} type="button" disabled={Boolean(pending)} key={owner} onClick={() => setChoices(current => current.map((value, index) => index === owner ? 1 - value : value) as [number, number, number])}>OWNER {owner + 1}: SLOT {owner * 2 + choice} ({mints[owner * 2 + choice]?.slice(0, 7) ?? "UNAVAILABLE"}…)</button>)}
+      <button aria-pressed={cycle === "reverse"} type="button" title="SET CYCLE: FORWARD / SET CYCLE: REVERSE" disabled={Boolean(pending)} onClick={() => setCycle(current => current === "forward" ? "reverse" : "forward")}>SET CYCLE: {cycle === "forward" ? "FORWARD" : "REVERSE"}</button>
       <button type="button" disabled={disabled} onClick={() => void submit("propose")}>PROPOSE {slots.join(" · ")} / {cycle.toUpperCase()}</button>
       <button className="accent" type="button" disabled={disabled} onClick={() => void submit("lock")}>LOCK EXACT REVISION</button>
-      {pending ? <code>{pending.signature} · WAITING FOR EXACT {pending.kind.toUpperCase()} POSTCONDITION</code> : null}{error ? <p role="alert">{error}</p> : null}
+      {pending ? <code aria-live="polite" role="status">{pending.signature} · WAITING FOR EXACT {pending.kind.toUpperCase()} POSTCONDITION</code> : null}{error ? <p role="alert">{error}</p> : null}
     </div>
   </section>;
 }

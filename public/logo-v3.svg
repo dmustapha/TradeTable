@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" role="img" aria-label="TradeTable combination mark">
+  <rect width="360" height="80" fill="#0B0C0A"/>
+  <rect x="20" y="24" width="32" height="32" fill="none" stroke="#D8FF45" stroke-width="5"/>
+  <circle cx="36" cy="10" r="6" fill="#D8FF45"/>
+  <circle cx="10" cy="66" r="6" fill="#D8FF45"/>
+  <circle cx="62" cy="66" r="6" fill="#D8FF45"/>
+  <text x="88" y="50" fill="#E9E5D8" font-family="IBM Plex Mono, monospace" font-size="30" font-weight="700" letter-spacing="-2">TRADE</text>
+  <text x="195" y="50" fill="#D8FF45" font-family="IBM Plex Mono, monospace" font-size="30" font-weight="700" letter-spacing="-2">TABLE</text>
+</svg>
