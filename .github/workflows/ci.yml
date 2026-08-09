@@ -1,0 +1,26 @@
+# File: .github/workflows/ci.yml
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.10.0
+          cache: npm
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+      - name: Install Anchor CLI
+        run: cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 anchor-cli --locked
+      - run: npm install --ignore-scripts
+      - run: anchor build
+      - run: cargo test --workspace
+      - run: npm run typecheck
+      - run: test -s target/idl/tradetable.json
