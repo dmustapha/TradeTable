@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "anchor test --skip-local-validator",
+    "test": "anchor idl build -o target/idl/tradetable.json && anchor build --no-idl -- --tools-version v1.54 && anchor test --skip-build --skip-deploy --skip-local-validator",
     "seed": "tsx scripts/ops.ts seed",
     "measure": "tsx scripts/ops.ts measure",
     "prove": "tsx scripts/ops.ts prove"
