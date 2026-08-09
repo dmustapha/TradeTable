@@ -5,7 +5,7 @@ use std::ops::Deref;
 use anchor_spl::associated_token::{get_associated_token_address_with_program_id, AssociatedToken};
 use anchor_spl::token::{self, Mint, Token, TokenAccount, TransferChecked};
 use ephemeral_rollups_sdk::anchor::{action, commit, delegate, ephemeral};
-use ephemeral_rollups_sdk::cpi::DelegateConfig;
+use ephemeral_rollups_sdk::cpi::{DelegateConfig, DELEGATION_PROGRAM_ID};
 use ephemeral_rollups_sdk::ephem::{CallHandler, MagicIntentBundleBuilder};
 use ephemeral_rollups_sdk::{ActionArgs, ShortAccountMeta};
 use solana_program::hash::hashv;
@@ -200,6 +200,22 @@ pub mod tradetable {
         Ok(())
     }
 
+    pub fn finalize_commit_only(ctx: Context<FinalizeCommitOnly>) -> Result<()> {
+        let core = read_core(&ctx.accounts.room_core)?;
+        validate_live_context(&core, &ctx.accounts.room_live, ctx.accounts.payer.key())?;
+        validate_lock_set(&ctx.accounts.room_live)?;
+        let (revision, allocation_hash) = mark_live_finalized(&mut ctx.accounts.room_live, ctx.accounts.payer.key())?;
+        MagicIntentBundleBuilder::new(
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.magic_context.to_account_info(),
+            ctx.accounts.magic_program.to_account_info(),
+        )
+        .commit_and_undelegate(&[ctx.accounts.room_live.to_account_info()])
+        .build_and_invoke()?;
+        emit!(FinalizationScheduled { core: core.key(), revision, allocation_hash });
+        Ok(())
+    }
+
     pub fn settle_action(mut ctx: Context<SettleAction>) -> Result<()> {
         settle_from_accounts(SettlementAccounts::from_action(&mut ctx.accounts))
     }
@@ -329,6 +345,14 @@ fn validate_lock_set(live: &RoomLive) -> Result<()> {
     Ok(())
 }
 
+fn mark_live_finalized(live: &mut Account<RoomLive>, actor: Pubkey) -> Result<(u64, [u8; 32])> {
+    require!(live.phase == LivePhase::Finalizing, TradeError::NotFinalizable);
+    live.phase = LivePhase::Finalized;
+    set_live_audit(live, actor, LiveAction::Finalized)?;
+    live.exit(&crate::ID).map_err(|_| TradeError::SerializationFailed)?;
+    Ok((live.revision, live.allocation_hash))
+}
+
 fn set_live_audit(live: &mut RoomLive, actor: Pubkey, action: LiveAction) -> Result<()> {
     live.last_actor = actor;
     live.last_action = action;
@@ -350,8 +374,8 @@ fn read_core(account: &UncheckedAccount) -> Result<Box<DecodedAccount<RoomCore>>
     Ok(Box::new(DecodedAccount { key: account.key(), value }))
 }
 
-fn read_live(account: &UncheckedAccount) -> Result<Box<DecodedAccount<RoomLive>>> {
-    require_keys_eq!(*account.owner, crate::ID, TradeError::InvalidAccountOwner);
+fn read_live(account: &UncheckedAccount, expected_owner: Pubkey) -> Result<Box<DecodedAccount<RoomLive>>> {
+    require_keys_eq!(*account.owner, expected_owner, TradeError::InvalidAccountOwner);
     let data = account.try_borrow_data()?;
     let value = RoomLive::try_deserialize(&mut data.as_ref()).map_err(|_| error!(TradeError::SerializationFailed))?;
     let (expected, _) = Pubkey::find_program_address(&[LIVE_SEED, value.core.as_ref()], &crate::ID);
@@ -464,25 +488,26 @@ struct SettlementAccounts<'a, 'info> {
     mints: [AccountInfo<'info>; 3],
     vaults: [AccountInfo<'info>; 3],
     destinations: [AccountInfo<'info>; 3],
+    live_owner: Pubkey,
 }
 
 impl<'a, 'info> SettlementAccounts<'a, 'info> {
     fn from_action(value: &'a mut SettleAction<'info>) -> Self {
-        Self::new(&mut value.room_core, &value.room_live, &value.vault_authority, value.token_program.to_account_info(), [&value.mint_0, &value.mint_1, &value.mint_2], [&value.vault_0, &value.vault_1, &value.vault_2], [&value.destination_0, &value.destination_1, &value.destination_2])
+        Self::new(&mut value.room_core, &value.room_live, &value.vault_authority, value.token_program.to_account_info(), [&value.mint_0, &value.mint_1, &value.mint_2], [&value.vault_0, &value.vault_1, &value.vault_2], [&value.destination_0, &value.destination_1, &value.destination_2], DELEGATION_PROGRAM_ID)
     }
 
     fn from_committed(value: &'a mut SettleCommitted<'info>) -> Self {
-        Self::new(&mut value.room_core, &value.room_live, &value.vault_authority, value.token_program.to_account_info(), [&value.mint_0, &value.mint_1, &value.mint_2], [&value.vault_0, &value.vault_1, &value.vault_2], [&value.destination_0, &value.destination_1, &value.destination_2])
+        Self::new(&mut value.room_core, &value.room_live, &value.vault_authority, value.token_program.to_account_info(), [&value.mint_0, &value.mint_1, &value.mint_2], [&value.vault_0, &value.vault_1, &value.vault_2], [&value.destination_0, &value.destination_1, &value.destination_2], crate::ID)
     }
 
-    fn new(core: &'a mut Account<'info, RoomCore>, live: &'a UncheckedAccount<'info>, authority: &'a UncheckedAccount<'info>, token_program: AccountInfo<'info>, mints: [&AccountInfo<'info>; 3], vaults: [&AccountInfo<'info>; 3], destinations: [&AccountInfo<'info>; 3]) -> Self {
-        Self { core, live, authority, token_program, mints: mints.map(Clone::clone), vaults: vaults.map(Clone::clone), destinations: destinations.map(Clone::clone) }
+    fn new(core: &'a mut Account<'info, RoomCore>, live: &'a UncheckedAccount<'info>, authority: &'a UncheckedAccount<'info>, token_program: AccountInfo<'info>, mints: [&AccountInfo<'info>; 3], vaults: [&AccountInfo<'info>; 3], destinations: [&AccountInfo<'info>; 3], live_owner: Pubkey) -> Self {
+        Self { core, live, authority, token_program, mints: mints.map(Clone::clone), vaults: vaults.map(Clone::clone), destinations: destinations.map(Clone::clone), live_owner }
     }
 }
 
 fn settle_from_accounts(mut accounts: SettlementAccounts) -> Result<()> {
     require!(accounts.core.status == CoreStatus::Active, TradeError::AlreadySettled);
-    let live = read_live(accounts.live)?;
+    let live = read_live(accounts.live, accounts.live_owner)?;
     require!(live.core == accounts.core.key() && accounts.core.live_room == accounts.live.key(), TradeError::CoreLiveMismatch);
     require!(live.participants == accounts.core.participants && live.expires_at == accounts.core.expires_at, TradeError::CoreLiveMismatch);
     require!(Clock::get()?.unix_timestamp < accounts.core.expires_at, TradeError::InvalidExpiry);
@@ -624,6 +649,16 @@ pub struct Finalize<'info> {
     #[account(address = crate::ID)] pub program_id: UncheckedAccount<'info>,
 }
 
+#[commit]
+#[derive(Accounts)]
+pub struct FinalizeCommitOnly<'info> {
+    #[account(mut)] pub payer: Signer<'info>,
+    /// CHECK: base account manually deserialized; read-only in the ER instruction.
+    pub room_core: UncheckedAccount<'info>,
+    #[account(mut, seeds = [LIVE_SEED, room_core.key().as_ref()], bump = room_live.bump)]
+    pub room_live: Box<Account<'info, RoomLive>>,
+}
+
 #[action]
 #[derive(Accounts)]
 pub struct SettleAction<'info> {
@@ -638,20 +673,26 @@ pub struct SettleAction<'info> {
     /// CHECK: shared settlement validates the selected mint.
     pub mint_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates the selected mint.
     pub mint_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates the selected mint.
     pub mint_2: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_2: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_2: AccountInfo<'info>,
 }
 
@@ -669,20 +710,26 @@ pub struct SettleCommitted<'info> {
     /// CHECK: shared settlement validates the selected mint.
     pub mint_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_0: AccountInfo<'info>,
     /// CHECK: shared settlement validates the selected mint.
     pub mint_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_1: AccountInfo<'info>,
     /// CHECK: shared settlement validates the selected mint.
     pub mint_2: AccountInfo<'info>,
     /// CHECK: shared settlement validates ownership, mint, and amount.
+    #[account(mut)]
     pub vault_2: AccountInfo<'info>,
     /// CHECK: shared settlement validates the canonical recipient ATA.
+    #[account(mut)]
     pub destination_2: AccountInfo<'info>,
 }
 
