@@ -7,13 +7,13 @@ TradeTable is a three-party collectible barter protocol on Solana Devnet. Three 
 [![Anchor](https://img.shields.io/badge/Anchor-0.32-6E56CF)](https://www.anchor-lang.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**Live:** https://app-gray-seven-93.vercel.app
+**Live:** https://tradetable-solana.vercel.app
 
 ![TradeTable shared collectors table](docs/images/landing.png)
 
 ## Live Demo
 
-Open [TradeTable on Vercel](https://app-gray-seven-93.vercel.app) to inspect the earned room state without connecting a wallet. The [Proof Ledger](https://app-gray-seven-93.vercel.app/proof) links the public program, room accounts, settlement transaction, and three separate return transactions.
+Open [TradeTable on Vercel](https://tradetable-solana.vercel.app) to inspect the earned room state without connecting a wallet. The [Proof Ledger](https://tradetable-solana.vercel.app/proof) links the public program, room accounts, settlement transaction, and three separate return transactions.
 
 ## What Is TradeTable?
 
@@ -98,10 +98,10 @@ The verified pipeline passed 12 behavioral acceptance checks, 43 debug checks, a
 
 ## Try It (3 minutes)
 
-1. Open the [live app](https://app-gray-seven-93.vercel.app).
+1. Open the [live app](https://tradetable-solana.vercel.app).
 2. Read `6 IN -> 3 TRADE + 3 RETURN` at the top of the table.
 3. Inspect the three participant seats, selected cards, revision seal, and three locks.
-4. Open the [Proof Ledger](https://app-gray-seven-93.vercel.app/proof).
+4. Open the [Proof Ledger](https://tradetable-solana.vercel.app/proof).
 5. Follow the base settlement signature to Solana Explorer.
 6. Verify that it contains the selected three transfers.
 7. Compare the three separate return signatures.
