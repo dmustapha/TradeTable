@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 64" role="img" aria-label="TradeTable wordmark">
+  <rect width="320" height="64" fill="#0B0C0A"/>
+  <text x="12" y="42" fill="#E9E5D8" font-family="IBM Plex Mono, monospace" font-size="28" font-weight="700" letter-spacing="-2">TRADE</text>
+  <text x="111" y="42" fill="#D8FF45" font-family="IBM Plex Mono, monospace" font-size="28" font-weight="700" letter-spacing="-2">TABLE</text>
+  <circle cx="294" cy="20" r="4" fill="#D8FF45"/>
+  <circle cx="284" cy="42" r="4" fill="#D8FF45"/>
+  <circle cx="304" cy="42" r="4" fill="#D8FF45"/>
+</svg>
