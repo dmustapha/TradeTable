@@ -15,6 +15,7 @@ import {
   immutableMintRecovery,
   fixtureFundingLamports,
   seedRoomMissingSlots,
+  ephemeralTarget,
   liveSourceIsAuthoritative,
   livePda,
   programId,
@@ -172,6 +173,13 @@ const behavioralTests: Test[] = [
       assert.deepEqual(seedRoomMissingSlots(63, roster, roster), []);
       assert.throws(() => seedRoomMissingSlots(0, ["a", "x", "c"], roster), /roster-mismatched/);
       assert.throws(() => seedRoomMissingSlots(64, roster, roster), /invalid deposit mask/);
+    },
+  },
+  {
+    name: "ephemeral target follows the base environment",
+    run: () => {
+      assert.equal(ephemeralTarget("http://127.0.0.1:8899").rpc, "http://127.0.0.1:7799");
+      assert.equal(ephemeralTarget("https://api.devnet.solana.com").validator.toBase58(), "MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
     },
   },
   {
@@ -350,9 +358,9 @@ async function custodySuite(namespace: string): Promise<void> {
 }
 
 async function waitForLive(program: any, live: PublicKey): Promise<any> {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     try { return await program.account.roomLive.fetch(live); } catch {}
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   return program.account.roomLive.fetch(live);
 }
@@ -367,13 +375,13 @@ async function stateSuite(namespace: string): Promise<void> {
   await fund(provider, outsider.publicKey);
   const [core] = roomPda(provider.wallet.publicKey, nonce);
   const [live] = livePda(core);
-  const localValidator = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
-  await program.methods.activateAndDelegateLive().accounts({participant: participants[0].publicKey, roomCore: core, roomLive: live}).remainingAccounts([{pubkey: localValidator, isSigner: false, isWritable: false}]).signers([participants[0]]).rpc();
+  const target = ephemeralTarget(provider.connection.rpcEndpoint);
+  await program.methods.activateAndDelegateLive().accounts({participant: participants[0].publicKey, roomCore: core, roomLive: live}).remainingAccounts([{pubkey: target.validator, isSigner: false, isWritable: false}]).signers([participants[0]]).rpc();
   const coreState = await program.account.roomCore.fetch(core) as any;
   assert.equal(coreState.status.active !== undefined, true);
   process.stdout.write("PASS fully funded room activates and delegates live state\n");
 
-  const erProvider = new AnchorProvider(new Connection("http://127.0.0.1:7799", "confirmed"), provider.wallet, provider.opts);
+  const erProvider = new AnchorProvider(new Connection(target.rpc, "confirmed"), provider.wallet, provider.opts);
   const erProgram = new Program(program.idl, erProvider) as any;
   await waitForLive(erProgram, live);
   await erProgram.methods.propose(new BN(0), [0, 2, 4], {forward: {}}).accounts({actor: participants[0].publicKey, roomCore: core, roomLive: live}).signers([participants[0]]).rpc();
@@ -439,9 +447,9 @@ async function prepareSettlement(namespace: string, createAllDestinations: boole
     destinations.push(canonical);
     if (createAllDestinations || leg < 2) await getOrCreateAssociatedTokenAccount(provider.connection, payer, assets[selected[leg]].mint, recipients[leg].publicKey);
   }
-  const localValidator = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
-  await program.methods.activateAndDelegateLive().accounts({participant: payer.publicKey, roomCore: core, roomLive: live}).remainingAccounts([{pubkey: localValidator, isSigner: false, isWritable: false}]).rpc();
-  const erProvider = new AnchorProvider(new Connection("http://127.0.0.1:7799", "confirmed"), provider.wallet, provider.opts);
+  const target = ephemeralTarget(provider.connection.rpcEndpoint);
+  await program.methods.activateAndDelegateLive().accounts({participant: payer.publicKey, roomCore: core, roomLive: live}).remainingAccounts([{pubkey: target.validator, isSigner: false, isWritable: false}]).rpc();
+  const erProvider = new AnchorProvider(new Connection(target.rpc, "confirmed"), provider.wallet, provider.opts);
   const erProgram = new Program(program.idl, erProvider) as any;
   await waitForLive(erProgram, live);
   await erProgram.methods.propose(new BN(0), selected, {forward: {}}).accounts({actor: payer.publicKey, roomCore: core, roomLive: live}).rpc();
@@ -463,10 +471,10 @@ function settlementAccounts(fixture: SettlementFixture) {
 }
 
 async function waitForSettled(fixture: SettlementFixture): Promise<any> {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     const state = await fixture.program.account.roomCore.fetch(fixture.core) as any;
     if (state.status.settled !== undefined) return state;
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   return fixture.program.account.roomCore.fetch(fixture.core);
 }
@@ -500,18 +508,25 @@ async function actionSettlementSuite(namespace: string): Promise<void> {
 async function fallbackSettlementSuite(namespace: string): Promise<void> {
   const fixture = await prepareSettlement(namespace, true);
   const commitSignature = await fixture.erProgram.methods.finalizeCommitOnly().accounts({payer: fixture.provider.wallet.publicKey, roomCore: fixture.core, roomLive: fixture.live}).rpc();
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
     const owner = (await fixture.provider.connection.getAccountInfo(fixture.live, "confirmed"))?.owner;
     if (owner?.equals(programId())) break;
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
   const before = await fixture.program.account.roomCore.fetch(fixture.core) as any;
   assert.equal(before.status.active !== undefined, true);
   for (const slot of fixture.selected) assert.equal((await getAccount(fixture.provider.connection, vaultAta(fixture.core, fixture.assets[slot].mint), "confirmed")).amount, 1n);
   const settlementSignature = await fixture.program.methods.settleCommitted().accounts({caller: fixture.provider.wallet.publicKey, ...settlementAccounts(fixture)}).rpc();
   await assertSelectedTransfers(fixture);
+  const returnSignatures: string[] = [];
+  for (const slot of [1, 3, 5]) {
+    returnSignatures.push(await fixture.program.methods.returnAsset(slot).accounts({caller: fixture.provider.wallet.publicKey, roomCore: fixture.core, mint: fixture.assets[slot].mint, vault: vaultAta(fixture.core, fixture.assets[slot].mint), originalOwner: fixture.participants[Math.floor(slot / 2)].publicKey, originalAta: fixture.assets[slot].ata}).rpc());
+  }
+  const closed = await fixture.program.account.roomCore.fetch(fixture.core) as any;
+  assert.equal(closed.status.complete !== undefined, true);
+  assert.equal(closed.returnedMask, 42);
   process.stdout.write("PASS commit-only finalization reaches normal base settlement fallback\n");
-  process.stdout.write(JSON.stringify({commitSignature, settlementSignature, core: fixture.core.toBase58(), selectedMask: 21}));
+  process.stdout.write(JSON.stringify({commitSignature, settlementSignature, returnSignatures, core: fixture.core.toBase58(), live: fixture.live.toBase58(), selectedMask: 21, returnedMask: 42, status: "complete"}));
 }
 
 async function seedOnly(namespace: string): Promise<void> {
