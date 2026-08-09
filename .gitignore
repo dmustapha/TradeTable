@@ -1,1 +1,36 @@
-.vercel
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Solana and Anchor build/runtime data
+target/
+.anchor/
+test-ledger/
+magicblock-test-storage/
+*-keypair.json
+
+# Test and browser evidence
+.playwright-cli/
+output/
+coverage/
+
+# Local deployment state
+.vercel/
+.local-env-evidence.md
+
+# Secrets and local environment
+.env
+.env.local
+.env*.local
+
+# Build artifacts
+dist/
+build/
+*.log
+*.tsbuildinfo
+
+# Local
+.DS_Store
