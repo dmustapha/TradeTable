@@ -59,6 +59,11 @@ export function seedRoomMissingSlots(depositedMask: number, actualRoster: string
   return [0, 1, 2, 3, 4, 5].filter(slot => (depositedMask & (1 << slot)) === 0);
 }
 
+export function ephemeralTarget(baseEndpoint: string): {rpc: string; validator: PublicKey} {
+  if (isLocalRpcEndpoint(baseEndpoint)) return {rpc: "http://127.0.0.1:7799", validator: new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev")};
+  return {rpc: ER_RPC, validator: ER_VALIDATOR};
+}
+
 export function immutableMintRecovery(supply: bigint, mintAuthority: PublicKey | null, freezeAuthority: PublicKey | null, payer: PublicKey) {
   if (supply < 0n || supply > 1n) throw new Error("invalid supply for deterministic mint recovery");
   if (mintAuthority && !mintAuthority.equals(payer)) throw new Error("foreign mint authority on deterministic fixture");

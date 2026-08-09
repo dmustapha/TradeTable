@@ -2,10 +2,11 @@
 import {execFileSync} from "child_process";
 import {mkdirSync, readFileSync, writeFileSync} from "fs";
 import {Connection, Keypair, PublicKey, Transaction} from "@solana/web3.js";
-import {BASE_RPC, explorerAddress, explorerTx} from "../src/lib/tradetable";
+import {BASE_RPC, ER_RPC, explorerAddress, explorerTx} from "../src/lib/tradetable";
 
 const command = process.argv[2];
 const connection = new Connection(BASE_RPC, "confirmed");
+const erConnection = new Connection(ER_RPC, "confirmed");
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -59,23 +60,27 @@ function changedTokenAccounts(transaction: NonNullable<Awaited<ReturnType<Connec
 async function prove(): Promise<void> {
   const program = new PublicKey(requireEnv("NEXT_PUBLIC_PROGRAM_ID"));
   const room = new PublicKey(requireEnv("NEXT_PUBLIC_DEMO_ROOM"));
+  const live = new PublicKey(requireEnv("NEXT_PUBLIC_DEMO_LIVE"));
+  const commitSignature = requireEnv("COMMIT_SIGNATURE");
   const signatures = requireEnv("PROOF_SIGNATURES").split(",").filter(Boolean);
   const settlementSignature = requireEnv("SETTLEMENT_SIGNATURE");
   const returnSignatures = requireEnv("RETURN_SIGNATURES").split(",").filter(Boolean);
   if (returnSignatures.length !== 3) throw new Error("RETURN_SIGNATURES must contain exactly three signatures");
   const measurements = JSON.parse(readFileSync(requireEnv("MEASUREMENT_OUTPUT_JSON"), "utf8")) as Record<string, {wireBytes: number; budgetWithMargin: number}>;
-  const [programInfo, roomInfo, transactions] = await Promise.all([
+  const [programInfo, roomInfo, liveInfo, commitTransaction, transactions] = await Promise.all([
     connection.getAccountInfo(program, "confirmed"),
     connection.getAccountInfo(room, "confirmed"),
+    connection.getAccountInfo(live, "confirmed"),
+    erConnection.getTransaction(commitSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}),
     Promise.all([...new Set([...signatures, settlementSignature, ...returnSignatures])].map(signature => connection.getTransaction(signature, {commitment: "confirmed", maxSupportedTransactionVersion: 0}))),
   ]);
-  if (!programInfo?.executable || !roomInfo || transactions.some(value => !value || value.meta?.err)) throw new Error("proof read-back failed");
+  if (!programInfo?.executable || !roomInfo || !liveInfo || !commitTransaction || commitTransaction.meta?.err || transactions.some(value => !value || value.meta?.err)) throw new Error("proof read-back failed");
   const settlement = await connection.getTransaction(settlementSignature, {commitment: "confirmed", maxSupportedTransactionVersion: 0});
   const returns = await Promise.all(returnSignatures.map(value => connection.getTransaction(value, {commitment: "confirmed", maxSupportedTransactionVersion: 0})));
   if (!settlement || changedTokenAccounts(settlement) !== 6) throw new Error("settlement must change exactly three vault and three destination balances");
   if (returns.some(value => !value || changedTokenAccounts(value) !== 2)) throw new Error("each return must change exactly one vault and one owner balance");
   if (Object.keys(measurements).length !== 2 || Object.values(measurements).some(value => value.wireBytes > 1_232 || value.budgetWithMargin > 1_400_000)) throw new Error("measurement report failed proof ceilings");
-  const lines = ["# TradeTable Devnet Proof", "", `- Program: ${explorerAddress(program)}`, `- RoomCore: ${explorerAddress(room)}`, `- Settlement: ${explorerTx(settlementSignature)} (6 token-account deltas = 3 transfers)`, ...returnSignatures.map(value => `- Return: ${explorerTx(value)} (2 token-account deltas)`), ...signatures.map(value => `- Transaction: ${explorerTx(value)}`), `- Measurements: ${JSON.stringify(measurements)}`, ""];
+  const lines = ["# TradeTable Devnet Proof", "", `- Program: ${explorerAddress(program)}`, `- RoomCore: ${explorerAddress(room)}`, `- RoomLive: ${explorerAddress(live)}`, `- Commit-only ER: ${commitSignature} (confirmed through ${ER_RPC})`, `- Settlement: ${explorerTx(settlementSignature)} (6 token-account deltas = 3 transfers)`, ...returnSignatures.map(value => `- Return: ${explorerTx(value)} (2 token-account deltas)`), ...signatures.map(value => `- Transaction: ${explorerTx(value)}`), `- Measurements: ${JSON.stringify(measurements)}`, ""];
   mkdirSync("submission", {recursive: true});
   writeFileSync("submission/proof.md", lines.join("\n"));
   process.stdout.write(lines.join("\n"));

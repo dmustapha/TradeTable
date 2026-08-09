@@ -1,0 +1,14 @@
+{
+  "commitOnlyDevnet": {
+    "wireBytes": 310,
+    "accountKeys": 6,
+    "unitsConsumed": 39986,
+    "budgetWithMargin": 43985
+  },
+  "normalSettlementDevnet": {
+    "wireBytes": 607,
+    "accountKeys": 15,
+    "unitsConsumed": 38908,
+    "budgetWithMargin": 42799
+  }
+}
