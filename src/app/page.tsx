@@ -2,7 +2,7 @@ import {Connection, PublicKey} from "@solana/web3.js";
 import {DELEGATION_PROGRAM_ID, getDelegationRecord} from "@magicblock-labs/ephemeral-rollups-sdk";
 import {
   BASE_RPC, BASE_RPC_FALLBACK, ER_RPC, ER_VALIDATOR, ROUTER_RPC, alternateExplorerTx,
-  explorerAddress, explorerTx, livePda,
+  explorerAddress, explorerTx, livePda, withTimeout,
 } from "@/lib/tradetable";
 import RoomClient from "./room-client";
 
@@ -17,7 +17,7 @@ async function firstAccount(address: PublicKey | null, sources: Array<[string, C
   if (!address) return null;
   for (const [source, connection] of sources) {
     try {
-      const value = await connection.getAccountInfo(address, "confirmed");
+      const value = await withTimeout(connection.getAccountInfo(address, "confirmed"), 10_000, `${source} account read`);
       if (value) return {value, source, refreshedAt: Date.now()};
     } catch {}
   }
@@ -46,20 +46,21 @@ export default async function Home({searchParams}: {searchParams: Promise<{mode?
   const program = key(process.env.NEXT_PUBLIC_PROGRAM_ID);
   const live = room && program ? livePda(room)[0] : null;
   const base = new Connection(BASE_RPC, "confirmed");
-  const fallback = BASE_RPC_FALLBACK ? new Connection(BASE_RPC_FALLBACK, "confirmed") : base;
+  const fallback = BASE_RPC_FALLBACK ? new Connection(BASE_RPC_FALLBACK, "confirmed") : null;
   const router = new Connection(ROUTER_RPC, "confirmed");
   const er = new Connection(ER_RPC, "confirmed");
-  const coreResult = await firstAccount(room, [["base", base], ["base fallback", fallback]]);
-  const baseLiveResult = await firstAccount(live, [["base", base], ["base fallback", fallback]]);
+  const baseSources: Array<[string, Connection]> = [["base", base], ...(fallback ? [["base fallback", fallback] as [string, Connection]] : [])];
+  const coreResult = await firstAccount(room, baseSources);
+  const baseLiveResult = await firstAccount(live, baseSources);
   const delegated = Boolean(baseLiveResult?.value.owner.equals(DELEGATION_PROGRAM_ID));
-  const delegation = delegated && live ? await getDelegationRecord(base, live, "confirmed").catch(() => null) : null;
+  const delegation = delegated && live ? await withTimeout(getDelegationRecord(base, live, "confirmed"), 10_000, "delegation read").catch(() => null) : null;
   const delegatedSources: Array<[string, Connection]> = [["router", router]];
   if (delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR)) delegatedSources.push(["direct ER", er]);
   const liveResult = delegated ? await firstAccount(live, delegatedSources) : baseLiveResult;
   const core = decodeCore(coreResult?.value.data);
   const liveState = decodeLive(liveResult?.value.data);
-  const mintInfos = core ? await base.getMultipleAccountsInfo(core.mints, "confirmed").catch(() => []) : [];
-  const signatures = room ? await base.getSignaturesForAddress(room, {limit: 8}, "confirmed").catch(() => []) : [];
+  const mintInfos = core ? await withTimeout(base.getMultipleAccountsInfo(core.mints, "confirmed"), 10_000, "mint reads").catch(() => []) : [];
+  const signatures = room ? await withTimeout(base.getSignaturesForAddress(room, {limit: 8}, "confirmed"), 10_000, "signature reads").catch(() => []) : [];
   const requested = (await searchParams).mode;
   const mode: Mode = requested === "committed" || requested === "recover" ? requested : "action";
   const seats = core?.participants ?? [];
@@ -111,14 +112,14 @@ export default async function Home({searchParams}: {searchParams: Promise<{mode?
       <article><span>CUSTODY MASK</span><strong>{core?.deposited ?? 0}<i>/63</i></strong><small>{core ? `selected ${core.selected} · returned ${core.returned}` : "unavailable"}</small></article>
     </section>
 
-    {room ? <RoomClient room={room.toBase58()} /> : <section className="notice"><strong>Read-only shell.</strong> Set `NEXT_PUBLIC_DEMO_ROOM` to an earned room; this page will never invent one.</section>}
+    {room ? <RoomClient room={room.toBase58()} participants={seats.map(value => value.toBase58())} mints={mints.map(value => value.toBase58())} /> : <section className="notice"><strong>Read-only shell.</strong> Set `NEXT_PUBLIC_DEMO_ROOM` to an earned room; this page will never invent one.</section>}
 
     <section className="operations">
-      <div><p className="kicker">CONSEQUENCE ROUTER</p><h2>A signature schedules.<br />Base state proves.</h2><p>Action acceptance is pending until RoomCore records settlement. A failed asynchronous intent is shown as stuck—not success.</p></div>
+      <div><p className="kicker">PROOF PATH SELECTOR</p><h2>Inspect a path.<br />Verify its boundary.</h2><p>Each selector does not send a transaction. It only opens an explanatory proof path. Public Devnet evidence covers commit-only ER finalization followed by selected-three base settlement. Local validator evidence covers the composed action. After a failed asynchronous action, the ER can remain Finalized/stuck with base custody unchanged. That is not an ER rollback. Choose Normal Settlement before scheduling to preserve the public fallback path.</p></div>
       <div className="modes">
-        <a aria-current={mode === "action"} href="?mode=action"><b>01</b><span><strong>COMPOSED ACTION</strong><small>Commit, undelegate, settle chosen three</small></span></a>
-        <a aria-current={mode === "committed"} href="?mode=committed"><b>02</b><span><strong>NORMAL SETTLEMENT</strong><small>Commit-only, then base consequence</small></span></a>
-        <a aria-current={mode === "recover"} href="?mode=recover"><b>03</b><span><strong>BASE RECOVERY</strong><small>Cancel, expire, permissionless returns</small></span></a>
+        <a aria-current={mode === "action"} href="?mode=action"><b>01</b><span><strong>COMPOSED ACTION</strong><small>LOCAL-VALIDATOR PROOF ONLY</small></span></a>
+        <a aria-current={mode === "committed"} href="?mode=committed"><b>02</b><span><strong>NORMAL SETTLEMENT</strong><small>PUBLIC DEVNET: COMMIT-ONLY + BASE SETTLEMENT</small></span></a>
+        <a aria-current={mode === "recover"} href="?mode=recover"><b>03</b><span><strong>BASE RECOVERY PROOF</strong><small>Separate cancel, expiry, and permissionless return evidence</small></span></a>
       </div>
     </section>
 
