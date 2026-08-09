@@ -413,6 +413,13 @@ async function stateSuite(namespace: string): Promise<void> {
   liveState = await erProgram.account.roomLive.fetch(live);
   assert.equal(liveState.revision.toNumber(), 2);
   assert.equal(liveState.lockMask, 7);
+  await expectRejected("participant cancellation is rejected once the active agreement is finalizing", () => program.methods
+    .cancelByParticipant()
+    .accounts({participant: participants[0].publicKey, roomCore: core})
+    .signers([participants[0]])
+    .rpc());
+  const activeCore = await program.account.roomCore.fetch(core) as any;
+  assert.equal(activeCore.status.active !== undefined, true);
   process.stdout.write(JSON.stringify({core: core.toBase58(), live: live.toBase58(), revision: 2, lockMask: 7, phase: "finalizing"}));
 }
 

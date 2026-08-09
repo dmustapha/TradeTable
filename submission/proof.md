@@ -5,6 +5,7 @@
 Public proof is commit-only ER finalization followed by a separate base settlement. Local composed-action evidence is not claimed as public Devnet evidence.
 
 - Program: https://explorer.solana.com/address/FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3?cluster=devnet
+- Security upgrade: https://explorer.solana.com/tx/3yhzSXkxDny8DY345Pirf7qfxJWtDSwnUkuYucdcRM6xxHdRL6vMW9LE75NVxkdqiM7cyuPPczCsXpfaFFftmkja?cluster=devnet (participant cancellation is now Funding-only; expiry recovery remains available through `cancel_expired`)
 - RoomCore: https://explorer.solana.com/address/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo?cluster=devnet
 - RoomLive: https://explorer.solana.com/address/46r8db8EKsrtzz2btXfxLz8A3vSX1FHmbw3ynpzSAbD1?cluster=devnet
 - Commit-only ER: 2fpZgMn89JbMQBWfcxDkoFmqcZeGNmbiskc9v5ym97uqYxUdaND2KP8coc3GJbTtNCbuUV6TBtjJCXYuaRby7yJc (confirmed through https://devnet-as.magicblock.app/)
