@@ -1,7 +1,7 @@
 // File: tests/tradetable.ts
 import {AnchorProvider, BN, Program, setProvider, workspace} from "@coral-xyz/anchor";
 import {AuthorityType, closeAccount, createMint, getAccount, getMint, getOrCreateAssociatedTokenAccount, mintTo, setAuthority} from "@solana/spl-token";
-import {Connection, Keypair, LAMPORTS_PER_SOL, PublicKey} from "@solana/web3.js";
+import {Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction} from "@solana/web3.js";
 import {strict as assert} from "assert";
 import {createHash} from "crypto";
 import {
@@ -12,6 +12,9 @@ import {
   acceptSourceSlot,
   isProjectionStale,
   isLocalRpcEndpoint,
+  immutableMintRecovery,
+  fixtureFundingLamports,
+  seedRoomMissingSlots,
   liveSourceIsAuthoritative,
   livePda,
   programId,
@@ -144,6 +147,31 @@ const behavioralTests: Test[] = [
       assert.equal(isLocalRpcEndpoint("http://127.0.0.1:8899"), true);
       assert.equal(isLocalRpcEndpoint("http://localhost:8899"), true);
       assert.equal(isLocalRpcEndpoint("https://api.devnet.solana.com"), false);
+      assert.equal(fixtureFundingLamports("http://127.0.0.1:8899", 0), null);
+      assert.equal(fixtureFundingLamports("https://api.devnet.solana.com", 0), 10_000_000);
+      assert.equal(fixtureFundingLamports("https://api.devnet.solana.com", 4_000_000), 6_000_000);
+      assert.equal(fixtureFundingLamports("https://api.devnet.solana.com", 10_000_000), 0);
+    },
+  },
+  {
+    name: "partial deterministic mints resume only under the payer authority",
+    run: () => {
+      const payer = fixtureKey("recovery", "payer").publicKey;
+      assert.deepEqual(immutableMintRecovery(0n, payer, payer, payer), {mint: true, revokeMint: true, revokeFreeze: true});
+      assert.deepEqual(immutableMintRecovery(1n, null, null, payer), {mint: false, revokeMint: false, revokeFreeze: false});
+      assert.throws(() => immutableMintRecovery(2n, payer, payer, payer), /invalid supply/);
+      assert.throws(() => immutableMintRecovery(1n, fixtureKey("recovery", "foreign").publicKey, payer, payer), /foreign mint authority/);
+    },
+  },
+  {
+    name: "partial deterministic rooms resume only with the exact roster",
+    run: () => {
+      const roster = ["a", "b", "c"];
+      assert.deepEqual(seedRoomMissingSlots(0, roster, roster), [0, 1, 2, 3, 4, 5]);
+      assert.deepEqual(seedRoomMissingSlots(21, roster, roster), [1, 3, 5]);
+      assert.deepEqual(seedRoomMissingSlots(63, roster, roster), []);
+      assert.throws(() => seedRoomMissingSlots(0, ["a", "x", "c"], roster), /roster-mismatched/);
+      assert.throws(() => seedRoomMissingSlots(64, roster, roster), /invalid deposit mask/);
     },
   },
   {
@@ -184,9 +212,13 @@ function anchorProgram(): {provider: AnchorProvider; program: any} {
 }
 
 async function fund(provider: AnchorProvider, wallet: PublicKey): Promise<void> {
-  if (!isLocalRpcEndpoint(provider.connection.rpcEndpoint)) return;
-  const signature = await provider.connection.requestAirdrop(wallet, 2 * LAMPORTS_PER_SOL);
-  await provider.connection.confirmTransaction(signature, "confirmed");
+  const required = fixtureFundingLamports(provider.connection.rpcEndpoint, await provider.connection.getBalance(wallet, "confirmed"));
+  if (required === null) {
+    const signature = await provider.connection.requestAirdrop(wallet, 2 * LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(signature, "confirmed");
+    return;
+  }
+  if (required > 0) await provider.sendAndConfirm(new Transaction().add(SystemProgram.transfer({fromPubkey: provider.wallet.publicKey, toPubkey: wallet, lamports: required})));
 }
 
 async function immutableAsset(provider: AnchorProvider, owner: Keypair, mintKeypair: Keypair): Promise<{mint: PublicKey; ata: PublicKey}> {
@@ -194,15 +226,16 @@ async function immutableAsset(provider: AnchorProvider, owner: Keypair, mintKeyp
   let mint = mintKeypair.publicKey;
   if (!await provider.connection.getAccountInfo(mint, "confirmed")) {
     mint = await createMint(provider.connection, payer, payer.publicKey, payer.publicKey, 0, mintKeypair);
-    const created = await getOrCreateAssociatedTokenAccount(provider.connection, payer, mint, owner.publicKey);
-    await mintTo(provider.connection, payer, mint, created.address, payer, 1);
-    await setAuthority(provider.connection, payer, mint, payer, AuthorityType.MintTokens, null);
-    const freezeAuthoritySignature = await setAuthority(provider.connection, payer, mint, payer, AuthorityType.FreezeAccount, null);
-    await provider.connection.confirmTransaction(freezeAuthoritySignature, "confirmed");
   }
+  const created = await getOrCreateAssociatedTokenAccount(provider.connection, payer, mint, owner.publicKey);
+  const partial = await getMint(provider.connection, mint, "confirmed");
+  const recovery = immutableMintRecovery(partial.supply, partial.mintAuthority, partial.freezeAuthority, payer.publicKey);
+  if (recovery.mint) await mintTo(provider.connection, payer, mint, created.address, payer, 1);
+  if (recovery.revokeMint) await setAuthority(provider.connection, payer, mint, payer, AuthorityType.MintTokens, null);
+  if (recovery.revokeFreeze) await setAuthority(provider.connection, payer, mint, payer, AuthorityType.FreezeAccount, null);
   const mintState = await waitForImmutableMint(provider, mint);
   if (mintState.decimals !== 0 || mintState.supply !== 1n || mintState.mintAuthority || mintState.freezeAuthority) throw new Error(`fixture mint policy mismatch: ${mint}`);
-  const ata = (await getOrCreateAssociatedTokenAccount(provider.connection, payer, mint, owner.publicKey)).address;
+  const ata = created.address;
   const token = await getAccount(provider.connection, ata, "confirmed");
   if (!token.owner.equals(owner.publicKey) || token.amount !== 1n) throw new Error(`fixture owner balance mismatch: ${mint}`);
   return {mint, ata};
@@ -489,36 +522,38 @@ async function seedOnly(namespace: string): Promise<void> {
   const existing = await provider.connection.getAccountInfo(core, "confirmed");
   const participants = [fixtureKey(namespace, "participant-0"), fixtureKey(namespace, "participant-1"), fixtureKey(namespace, "participant-2")];
   await Promise.all(participants.map(value => fund(provider, value.publicKey)));
-  if (existing) {
-    const state = await program.account.roomCore.fetch(core) as any;
-    if (state.depositedMask !== 63 || !state.participants.every((key: PublicKey, index: number) => key.equals(participants[index].publicKey))) throw new Error("existing deterministic room is partial or roster-mismatched; choose a fresh DEMO_SEED_NAMESPACE");
-    const existingMints: string[] = [];
-    for (let slot = 0; slot < 6; slot += 1) {
-      const record = state.assets[slot];
-      const mint = await getMint(provider.connection, record.mint, "confirmed");
-      const vault = await getAccount(provider.connection, record.vault, "confirmed");
-      if (mint.decimals !== 0 || mint.supply !== 1n || mint.mintAuthority || mint.freezeAuthority || vault.amount !== 1n || !vault.mint.equals(record.mint)) throw new Error(`existing slot ${slot} fails custody policy`);
-      existingMints.push(record.mint.toBase58());
-    }
-    process.stdout.write(JSON.stringify({core: core.toBase58(), live: live.toBase58(), participants: participants.map(value => value.publicKey.toBase58()), mints: existingMints, reused: true}));
-    return;
-  }
+  let coreState = existing ? await program.account.roomCore.fetch(core) as any : null;
+  let missing = coreState ? seedRoomMissingSlots(coreState.depositedMask, coreState.participants.map((value: PublicKey) => value.toBase58()), participants.map(value => value.publicKey.toBase58())) : [0, 1, 2, 3, 4, 5];
   const assets = [] as Array<{mint: PublicKey; ata: PublicKey}>;
-  for (let ownerIndex = 0; ownerIndex < participants.length; ownerIndex += 1) {
-    assets.push(await immutableAsset(provider, participants[ownerIndex], fixtureKey(namespace, `mint-${ownerIndex * 2}`)));
-    assets.push(await immutableAsset(provider, participants[ownerIndex], fixtureKey(namespace, `mint-${ownerIndex * 2 + 1}`)));
-  }
-  const expiry = Math.floor(Date.now() / 1000) + 3_600;
-  await program.methods.initializeRoom(new BN(nonce.toString()), participants.map(value => value.publicKey), new BN(expiry)).accounts({creator: provider.wallet.publicKey, roomCore: core, roomLive: live}).rpc();
-  let coreState = await program.account.roomCore.fetch(core) as any;
   for (let slot = 0; slot < 6; slot += 1) {
-    if ((coreState.depositedMask & (1 << slot)) !== 0) continue;
+    const participant = participants[Math.floor(slot / 2)];
+    const expectedMint = fixtureKey(namespace, `mint-${slot}`).publicKey;
+    if (coreState && !missing.includes(slot)) {
+      const record = coreState.assets[slot];
+      const mint = await getMint(provider.connection, expectedMint, "confirmed");
+      const vault = await getAccount(provider.connection, record.vault, "confirmed");
+      if (!record.mint.equals(expectedMint) || mint.supply !== 1n || mint.mintAuthority || mint.freezeAuthority || vault.amount !== 1n) throw new Error(`existing slot ${slot} fails custody policy`);
+      assets.push({mint: expectedMint, ata: destinationAta(participant.publicKey, expectedMint)});
+    } else assets.push(await immutableAsset(provider, participant, fixtureKey(namespace, `mint-${slot}`)));
+  }
+  if (!existing) {
+    const expiry = Math.floor(Date.now() / 1000) + 3_600;
+    await program.methods.initializeRoom(new BN(nonce.toString()), participants.map(value => value.publicKey), new BN(expiry)).accounts({creator: provider.wallet.publicKey, roomCore: core, roomLive: live}).rpc();
+  }
+  coreState = await program.account.roomCore.fetch(core) as any;
+  missing = seedRoomMissingSlots(coreState.depositedMask, coreState.participants.map((value: PublicKey) => value.toBase58()), participants.map(value => value.publicKey.toBase58()));
+  for (const slot of missing) {
     const participant = participants[Math.floor(slot / 2)];
     await program.methods.depositAsset(slot).accounts({participant: participant.publicKey, roomCore: core, mint: assets[slot].mint, source: assets[slot].ata, vault: vaultAta(core, assets[slot].mint)}).signers([participant]).rpc();
   }
   coreState = await program.account.roomCore.fetch(core) as any;
   assert.equal(coreState.depositedMask, 63);
-  process.stdout.write(JSON.stringify({core: core.toBase58(), live: live.toBase58(), participants: participants.map(value => value.publicKey.toBase58()), mints: assets.map(value => value.mint.toBase58()), reused: false}));
+  for (let slot = 0; slot < 6; slot += 1) {
+    const record = coreState.assets[slot];
+    const vault = await getAccount(provider.connection, record.vault, "confirmed");
+    if (!record.mint.equals(assets[slot].mint) || !record.vault.equals(vaultAta(core, assets[slot].mint)) || vault.amount !== 1n || !vault.mint.equals(record.mint)) throw new Error(`existing slot ${slot} fails custody policy`);
+  }
+  process.stdout.write(JSON.stringify({core: core.toBase58(), live: live.toBase58(), participants: participants.map(value => value.publicKey.toBase58()), mints: assets.map(value => value.mint.toBase58()), reused: Boolean(existing), resumedSlots: missing}));
 }
 
 const seedIndex = process.argv.indexOf("--seed-only");
