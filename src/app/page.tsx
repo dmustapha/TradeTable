@@ -1,6 +1,7 @@
 import {Connection, PublicKey} from "@solana/web3.js";
+import {DELEGATION_PROGRAM_ID, getDelegationRecord} from "@magicblock-labs/ephemeral-rollups-sdk";
 import {
-  BASE_RPC, BASE_RPC_FALLBACK, ER_RPC, ROUTER_RPC, alternateExplorerTx,
+  BASE_RPC, BASE_RPC_FALLBACK, ER_RPC, ER_VALIDATOR, ROUTER_RPC, alternateExplorerTx,
   explorerAddress, explorerTx, livePda,
 } from "@/lib/tradetable";
 import RoomClient from "./room-client";
@@ -49,7 +50,12 @@ export default async function Home({searchParams}: {searchParams: Promise<{mode?
   const router = new Connection(ROUTER_RPC, "confirmed");
   const er = new Connection(ER_RPC, "confirmed");
   const coreResult = await firstAccount(room, [["base", base], ["base fallback", fallback]]);
-  const liveResult = await firstAccount(live, [["router", router], ["direct ER", er], ["base", base]]);
+  const baseLiveResult = await firstAccount(live, [["base", base], ["base fallback", fallback]]);
+  const delegated = Boolean(baseLiveResult?.value.owner.equals(DELEGATION_PROGRAM_ID));
+  const delegation = delegated && live ? await getDelegationRecord(base, live, "confirmed").catch(() => null) : null;
+  const delegatedSources: Array<[string, Connection]> = [["router", router]];
+  if (delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR)) delegatedSources.push(["direct ER", er]);
+  const liveResult = delegated ? await firstAccount(live, delegatedSources) : baseLiveResult;
   const core = decodeCore(coreResult?.value.data);
   const liveState = decodeLive(liveResult?.value.data);
   const mintInfos = core ? await base.getMultipleAccountsInfo(core.mints, "confirmed").catch(() => []) : [];
