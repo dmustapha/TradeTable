@@ -20,7 +20,8 @@ jobs:
       - name: Install Anchor CLI
         run: cargo install --git https://github.com/coral-xyz/anchor --tag v0.32.1 anchor-cli --locked
       - run: npm install --ignore-scripts
-      - run: anchor build
+      - run: anchor idl build -o target/idl/tradetable.json
+      - run: anchor build --no-idl -- --tools-version v1.54
       - run: cargo test --workspace
       - run: npm run typecheck
       - run: test -s target/idl/tradetable.json
