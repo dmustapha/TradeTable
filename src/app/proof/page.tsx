@@ -8,6 +8,7 @@ const accounts = [
 ] as const;
 
 const transactions = [
+  ["SECURITY UPGRADE", "3yhzSXkxDny8DY345Pirf7qfxJWtDSwnUkuYucdcRM6xxHdRL6vMW9LE75NVxkdqiM7cyuPPczCsXpfaFFftmkja"],
   ["SELECTED-THREE SETTLEMENT", "2vsmk7HDrWzRTAG1sbY9U7oFS14mgZ4CgZQZ5nDCSmxSPoe71wWUAXKZFmSF2UKwdsCMBdtSbKzXyqScMpTH6BX5"],
   ["SEPARATE RETURN 01", "5fArNw2GtfLHK5vq344wPnqqGrb9t2bYzabfLYQNrwAbJs5egj4ydhcposp5NWBZR3mtQToepCb6NXCdSN7391ms"],
   ["SEPARATE RETURN 02", "3u98udn2X1XBzYzepb8Mm8wvHsKcuM7Vc3Gq6A4pX5CG83VoiSJBM3qucxbiyJtYa9xvV1xwrr7bqXLnTMUGR26y"],

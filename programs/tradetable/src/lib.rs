@@ -226,6 +226,7 @@ pub mod tradetable {
 
     pub fn cancel_by_participant(ctx: Context<CancelByParticipant>) -> Result<()> {
         require_participant(&ctx.accounts.room_core.participants, ctx.accounts.participant.key())?;
+        require!(ctx.accounts.room_core.status == CoreStatus::Funding, TradeError::InvalidCoreStatus);
         cancel_core(&mut ctx.accounts.room_core, ctx.accounts.participant.key(), false)
     }
 

@@ -119,6 +119,7 @@ Wallet writes require one of the fixed room participants and an active negotiati
 | What | Address / Link |
 |---|---|
 | Program | [Solana Explorer](https://explorer.solana.com/address/FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3?cluster=devnet) |
+| Security upgrade | [Solana Explorer](https://explorer.solana.com/tx/3yhzSXkxDny8DY345Pirf7qfxJWtDSwnUkuYucdcRM6xxHdRL6vMW9LE75NVxkdqiM7cyuPPczCsXpfaFFftmkja?cluster=devnet) |
 | RoomCore | [Solana Explorer](https://explorer.solana.com/address/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo?cluster=devnet) |
 | Selected-three settlement | [Solana Explorer](https://explorer.solana.com/tx/2vsmk7HDrWzRTAG1sbY9U7oFS14mgZ4CgZQZ5nDCSmxSPoe71wWUAXKZFmSF2UKwdsCMBdtSbKzXyqScMpTH6BX5?cluster=devnet) |
 | Proof manifest | [`submission/proof.md`](submission/proof.md) |
