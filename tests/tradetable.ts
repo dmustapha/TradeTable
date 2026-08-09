@@ -8,6 +8,10 @@ import {
   allocationHash,
   destinationAta,
   destinations,
+  emptyWatermarks,
+  acceptSourceSlot,
+  isProjectionStale,
+  liveSourceIsAuthoritative,
   livePda,
   programId,
   roomPda,
@@ -131,6 +135,27 @@ const behavioralTests: Test[] = [
       } finally {
         if (previous !== undefined) process.env.NEXT_PUBLIC_PROGRAM_ID = previous;
       }
+    },
+  },
+  {
+    name: "routing keeps independent source watermarks and delegation authority",
+    run: () => {
+      const watermarks = emptyWatermarks();
+      assert.equal(acceptSourceSlot(watermarks, "base-ws", 900), true);
+      assert.equal(acceptSourceSlot(watermarks, "er-ws", 12), true);
+      assert.equal(acceptSourceSlot(watermarks, "base-ws", 899), false);
+      assert.equal(liveSourceIsAuthoritative("base-ws", false, false), true);
+      assert.equal(liveSourceIsAuthoritative("base-ws", true, true), false);
+      assert.equal(liveSourceIsAuthoritative("router-ws", true, false), true);
+      assert.equal(liveSourceIsAuthoritative("er-ws", true, false), false);
+      assert.equal(liveSourceIsAuthoritative("er-ws", true, true), true);
+    },
+  },
+  {
+    name: "routing marks projections stale only after five seconds",
+    run: () => {
+      assert.equal(isProjectionStale(10_000, 15_000), false);
+      assert.equal(isProjectionStale(10_000, 15_001), true);
     },
   },
 ];

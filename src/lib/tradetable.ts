@@ -1,6 +1,6 @@
 // File: src/lib/tradetable.ts
 import { AnchorProvider, BN, Idl, Program, Wallet } from "@coral-xyz/anchor";
-import { ConnectionMagicRouter } from "@magicblock-labs/ephemeral-rollups-sdk";
+import { ConnectionMagicRouter, DELEGATION_PROGRAM_ID, getDelegationRecord } from "@magicblock-labs/ephemeral-rollups-sdk";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, TOKEN_PROGRAM_ID, getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import {sha256} from "@noble/hashes/sha256";
@@ -21,8 +21,27 @@ export function programId(): PublicKey {
 }
 
 export type Cycle = "forward" | "reverse";
-export type AuthoritySource = "base-ws" | "router-ws" | "er-ws" | "poll";
+export type AuthoritySource = "base-ws" | "base-poll" | "router-ws" | "router-poll" | "er-ws" | "er-poll";
 export type LiveProjection = { revision: bigint; allocationHash: Uint8Array; lockMask: number; phase: string; source: AuthoritySource; observedAt: number };
+export type SourceWatermarks = Record<AuthoritySource, number>;
+
+export const emptyWatermarks = (): SourceWatermarks => ({"base-ws": 0, "base-poll": 0, "router-ws": 0, "router-poll": 0, "er-ws": 0, "er-poll": 0});
+
+export function acceptSourceSlot(watermarks: SourceWatermarks, source: AuthoritySource, slot: number): boolean {
+  if (slot < watermarks[source]) return false;
+  watermarks[source] = slot;
+  return true;
+}
+
+export function liveSourceIsAuthoritative(source: AuthoritySource, delegated: boolean, directValidator: boolean): boolean {
+  if (!delegated) return source === "base-ws" || source === "base-poll";
+  if (source === "router-ws" || source === "router-poll") return true;
+  return directValidator && (source === "er-ws" || source === "er-poll");
+}
+
+export function isProjectionStale(observedAt: number, now = Date.now(), thresholdMs = 5_000): boolean {
+  return now - observedAt > thresholdMs;
+}
 
 export function roomPda(creator: PublicKey, nonce: bigint): [PublicKey, number] {
   const value = new Uint8Array(8);
@@ -139,19 +158,37 @@ export function subscribeAuthoritative(
   const baseFallback = BASE_RPC_FALLBACK ? new Connection(BASE_RPC_FALLBACK, "confirmed") : null;
   const router = routerSubscriptionConnection();
   const er = directErConnection();
-  let lastCoreSlot = 0;
-  let lastLiveSlot = 0;
-  const publishCore = (data: Buffer, source: AuthoritySource, slot: number) => { if (slot >= lastCoreSlot) { lastCoreSlot = slot; onCore(data, source); } };
-  const publishLive = (data: Buffer, source: AuthoritySource, slot: number) => { if (slot >= lastLiveSlot) { lastLiveSlot = slot; onLive(data, source); } };
+  const coreWatermarks = emptyWatermarks();
+  const liveWatermarks = emptyWatermarks();
+  let delegated = false;
+  let directValidator = false;
+  const publishCore = (data: Buffer, source: AuthoritySource, slot: number) => { if (acceptSourceSlot(coreWatermarks, source, slot)) onCore(data, source); };
+  const publishLive = (data: Buffer, source: AuthoritySource, slot: number) => {
+    if (liveSourceIsAuthoritative(source, delegated, directValidator) && acceptSourceSlot(liveWatermarks, source, slot)) onLive(data, source);
+  };
   const baseCoreId = base.onAccountChange(core, (value, context) => publishCore(value.data, "base-ws", context.slot), "confirmed");
-  const baseLiveId = base.onAccountChange(live, (value, context) => publishLive(value.data, "base-ws", context.slot), "confirmed");
+  const baseLiveId = base.onAccountChange(live, (value, context) => {
+    delegated = value.owner.equals(DELEGATION_PROGRAM_ID);
+    publishLive(value.data, "base-ws", context.slot);
+  }, "confirmed");
   const routerLiveId = router.onAccountChange(live, (value, context) => publishLive(value.data, "router-ws", context.slot), "confirmed");
   const erLiveId = er.onAccountChange(live, (value, context) => publishLive(value.data, "er-ws", context.slot), "confirmed");
   const pollId = setInterval(async () => {
     const baseReader = baseFallback ?? base;
-    const [coreValue, liveValue, baseSlot, erSlot] = await Promise.all([base.getAccountInfo(core).catch(() => baseReader.getAccountInfo(core)), er.getAccountInfo(live), baseReader.getSlot("confirmed"), er.getSlot("confirmed")]);
-    if (coreValue) publishCore(coreValue.data, "poll", baseSlot);
-    if (liveValue) publishLive(liveValue.data, "poll", erSlot);
+    const [coreResult, baseLiveResult, delegation] = await Promise.all([
+      baseReader.getAccountInfoAndContext(core, "confirmed"),
+      baseReader.getAccountInfoAndContext(live, "confirmed"),
+      getDelegationRecord(baseReader, live, "confirmed").catch(() => null),
+    ]);
+    delegated = Boolean(baseLiveResult.value?.owner.equals(DELEGATION_PROGRAM_ID) && delegation?.status === 0);
+    directValidator = Boolean(delegated && delegation?.status === 0 && delegation.validator.equals(ER_VALIDATOR));
+    if (coreResult.value) publishCore(coreResult.value.data, "base-poll", coreResult.context.slot);
+    if (!delegated && baseLiveResult.value) publishLive(baseLiveResult.value.data, "base-poll", baseLiveResult.context.slot);
+    if (delegated) {
+      const connection = directValidator ? er : router;
+      const result = await connection.getAccountInfoAndContext(live, "confirmed").catch(() => null);
+      if (result?.value) publishLive(result.value.data, directValidator ? "er-poll" : "router-poll", result.context.slot);
+    }
   }, 1_000);
   return async () => {
     clearInterval(pollId);
