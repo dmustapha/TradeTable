@@ -1,0 +1,2378 @@
+{
+  "address": "FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3",
+  "metadata": {
+    "name": "tradetable",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Three-party live barter with base-layer recoverable custody"
+  },
+  "instructions": [
+    {
+      "name": "activate_and_delegate_live",
+      "discriminator": [
+        167,
+        131,
+        19,
+        249,
+        52,
+        211,
+        58,
+        15
+      ],
+      "accounts": [
+        {
+          "name": "participant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buffer_room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_live"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                214,
+                99,
+                202,
+                68,
+                190,
+                75,
+                176,
+                101,
+                236,
+                86,
+                184,
+                208,
+                98,
+                82,
+                144,
+                222,
+                237,
+                107,
+                247,
+                177,
+                108,
+                212,
+                61,
+                182,
+                33,
+                133,
+                190,
+                30,
+                222,
+                78,
+                186,
+                226
+              ]
+            }
+          }
+        },
+        {
+          "name": "delegation_record_room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_live"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "delegation_metadata_room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  105,
+                  111,
+                  110,
+                  45,
+                  109,
+                  101,
+                  116,
+                  97,
+                  100,
+                  97,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_live"
+              }
+            ],
+            "program": {
+              "kind": "account",
+              "path": "delegation_program"
+            }
+          }
+        },
+        {
+          "name": "room_live",
+          "writable": true
+        },
+        {
+          "name": "owner_program",
+          "address": "FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3"
+        },
+        {
+          "name": "delegation_program",
+          "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_by_participant",
+      "discriminator": [
+        101,
+        237,
+        219,
+        213,
+        169,
+        47,
+        24,
+        215
+      ],
+      "accounts": [
+        {
+          "name": "participant",
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "cancel_expired",
+      "discriminator": [
+        248,
+        138,
+        112,
+        93,
+        177,
+        89,
+        249,
+        246
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "deposit_asset",
+      "discriminator": [
+        107,
+        93,
+        89,
+        87,
+        226,
+        203,
+        154,
+        19
+      ],
+      "accounts": [
+        {
+          "name": "participant",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "source",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "participant"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "vault_authority"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "finalize",
+      "discriminator": [
+        171,
+        61,
+        218,
+        56,
+        127,
+        115,
+        12,
+        217
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core"
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint_0"
+        },
+        {
+          "name": "vault_0"
+        },
+        {
+          "name": "destination_0"
+        },
+        {
+          "name": "mint_1"
+        },
+        {
+          "name": "vault_1"
+        },
+        {
+          "name": "destination_1"
+        },
+        {
+          "name": "mint_2"
+        },
+        {
+          "name": "vault_2"
+        },
+        {
+          "name": "destination_2"
+        },
+        {
+          "name": "program_id",
+          "address": "FRtW8QWScLWgDSwSWxnRTBhD8kMXg82aLV2qA3WCtXq3"
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize_commit_only",
+      "discriminator": [
+        205,
+        9,
+        122,
+        188,
+        42,
+        77,
+        201,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core"
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "magic_program",
+          "address": "Magic11111111111111111111111111111111111111"
+        },
+        {
+          "name": "magic_context",
+          "writable": true,
+          "address": "MagicContext1111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_room",
+      "discriminator": [
+        216,
+        42,
+        137,
+        161,
+        61,
+        72,
+        154,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "room_nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "room_nonce",
+          "type": "u64"
+        },
+        {
+          "name": "participants",
+          "type": {
+            "array": [
+              "pubkey",
+              3
+            ]
+          }
+        },
+        {
+          "name": "expires_at",
+          "type": "i64"
+        }
+      ]
+    },
+    {
+      "name": "lock",
+      "discriminator": [
+        21,
+        19,
+        208,
+        43,
+        237,
+        62,
+        255,
+        87
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "room_core"
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "expected_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "process_undelegation",
+      "discriminator": [
+        196,
+        28,
+        41,
+        206,
+        48,
+        37,
+        51,
+        167
+      ],
+      "accounts": [
+        {
+          "name": "base_account",
+          "writable": true
+        },
+        {
+          "name": "buffer",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  117,
+                  110,
+                  100,
+                  101,
+                  108,
+                  101,
+                  103,
+                  97,
+                  116,
+                  101,
+                  45,
+                  98,
+                  117,
+                  102,
+                  102,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "base_account"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                181,
+                183,
+                0,
+                225,
+                242,
+                87,
+                58,
+                192,
+                204,
+                6,
+                34,
+                1,
+                52,
+                74,
+                207,
+                151,
+                184,
+                53,
+                6,
+                235,
+                140,
+                229,
+                25,
+                152,
+                204,
+                98,
+                126,
+                24,
+                147,
+                128,
+                167,
+                62
+              ]
+            }
+          }
+        },
+        {
+          "name": "payer",
+          "writable": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "account_seeds",
+          "type": {
+            "vec": "bytes"
+          }
+        }
+      ]
+    },
+    {
+      "name": "propose",
+      "discriminator": [
+        93,
+        253,
+        82,
+        168,
+        118,
+        33,
+        102,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "room_core"
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "selected_slots",
+          "type": {
+            "array": [
+              "u8",
+              3
+            ]
+          }
+        },
+        {
+          "name": "cycle",
+          "type": {
+            "defined": {
+              "name": "Cycle"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "return_asset",
+      "discriminator": [
+        23,
+        135,
+        171,
+        52,
+        46,
+        114,
+        126,
+        78
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "vault",
+          "writable": true
+        },
+        {
+          "name": "original_owner"
+        },
+        {
+          "name": "original_ata",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "original_owner"
+              },
+              {
+                "kind": "account",
+                "path": "token_program"
+              },
+              {
+                "kind": "account",
+                "path": "mint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "slot",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "revoke_lock",
+      "discriminator": [
+        169,
+        28,
+        2,
+        144,
+        199,
+        66,
+        225,
+        166
+      ],
+      "accounts": [
+        {
+          "name": "actor",
+          "signer": true
+        },
+        {
+          "name": "room_core"
+        },
+        {
+          "name": "room_live",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  108,
+                  105,
+                  118,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "expected_revision",
+          "type": "u64"
+        },
+        {
+          "name": "expected_hash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "settle_action",
+      "discriminator": [
+        10,
+        58,
+        136,
+        98,
+        207,
+        113,
+        239,
+        90
+      ],
+      "accounts": [
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room_live"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint_0"
+        },
+        {
+          "name": "vault_0",
+          "writable": true
+        },
+        {
+          "name": "destination_0",
+          "writable": true
+        },
+        {
+          "name": "mint_1"
+        },
+        {
+          "name": "vault_1",
+          "writable": true
+        },
+        {
+          "name": "destination_1",
+          "writable": true
+        },
+        {
+          "name": "mint_2"
+        },
+        {
+          "name": "vault_2",
+          "writable": true
+        },
+        {
+          "name": "destination_2",
+          "writable": true
+        },
+        {
+          "name": "escrow_auth"
+        },
+        {
+          "name": "escrow"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_committed",
+      "discriminator": [
+        207,
+        70,
+        245,
+        29,
+        227,
+        227,
+        171,
+        243
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "room_core",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  111,
+                  109
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core.creator",
+                "account": "RoomCore"
+              },
+              {
+                "kind": "account",
+                "path": "room_core.room_nonce",
+                "account": "RoomCore"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room_live"
+        },
+        {
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116,
+                  95,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "room_core"
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "mint_0"
+        },
+        {
+          "name": "vault_0",
+          "writable": true
+        },
+        {
+          "name": "destination_0",
+          "writable": true
+        },
+        {
+          "name": "mint_1"
+        },
+        {
+          "name": "vault_1",
+          "writable": true
+        },
+        {
+          "name": "destination_1",
+          "writable": true
+        },
+        {
+          "name": "mint_2"
+        },
+        {
+          "name": "vault_2",
+          "writable": true
+        },
+        {
+          "name": "destination_2",
+          "writable": true
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [
+    {
+      "name": "RoomCore",
+      "discriminator": [
+        159,
+        7,
+        60,
+        81,
+        143,
+        33,
+        177,
+        65
+      ]
+    },
+    {
+      "name": "RoomLive",
+      "discriminator": [
+        245,
+        92,
+        71,
+        83,
+        30,
+        246,
+        85,
+        29
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AssetDeposited",
+      "discriminator": [
+        97,
+        219,
+        56,
+        126,
+        243,
+        136,
+        59,
+        195
+      ]
+    },
+    {
+      "name": "AssetReturned",
+      "discriminator": [
+        243,
+        207,
+        130,
+        220,
+        48,
+        139,
+        145,
+        225
+      ]
+    },
+    {
+      "name": "FinalizationScheduled",
+      "discriminator": [
+        127,
+        87,
+        233,
+        35,
+        60,
+        135,
+        103,
+        240
+      ]
+    },
+    {
+      "name": "LiveDelegated",
+      "discriminator": [
+        164,
+        18,
+        235,
+        148,
+        225,
+        66,
+        89,
+        57
+      ]
+    },
+    {
+      "name": "LockChanged",
+      "discriminator": [
+        83,
+        132,
+        93,
+        50,
+        120,
+        155,
+        81,
+        252
+      ]
+    },
+    {
+      "name": "ProposalChanged",
+      "discriminator": [
+        56,
+        237,
+        73,
+        38,
+        179,
+        6,
+        87,
+        77
+      ]
+    },
+    {
+      "name": "RoomCancelled",
+      "discriminator": [
+        139,
+        79,
+        156,
+        200,
+        40,
+        164,
+        207,
+        171
+      ]
+    },
+    {
+      "name": "RoomInitialized",
+      "discriminator": [
+        99,
+        248,
+        213,
+        34,
+        144,
+        84,
+        56,
+        93
+      ]
+    },
+    {
+      "name": "RoomSettled",
+      "discriminator": [
+        139,
+        64,
+        121,
+        102,
+        137,
+        174,
+        165,
+        105
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidParticipants",
+      "msg": "participants must be three distinct non-default wallets"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidExpiry",
+      "msg": "expiry is invalid"
+    },
+    {
+      "code": 6002,
+      "name": "UnauthorizedParticipant",
+      "msg": "signer is not authorized for this participant action"
+    },
+    {
+      "code": 6003,
+      "name": "InvalidCoreStatus",
+      "msg": "core status rejects this instruction"
+    },
+    {
+      "code": 6004,
+      "name": "InvalidLivePhase",
+      "msg": "live phase rejects this instruction"
+    },
+    {
+      "code": 6005,
+      "name": "SlotOutOfRange",
+      "msg": "slot is outside zero through five"
+    },
+    {
+      "code": 6006,
+      "name": "SlotAlreadyDeposited",
+      "msg": "slot already contains a deposit"
+    },
+    {
+      "code": 6007,
+      "name": "DuplicateMint",
+      "msg": "mint already appears in this room"
+    },
+    {
+      "code": 6008,
+      "name": "InvalidMintPolicy",
+      "msg": "mint is not an immutable classic supply-one asset"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidSourceAccount",
+      "msg": "source token account is invalid"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidVault",
+      "msg": "vault account is invalid"
+    },
+    {
+      "code": 6011,
+      "name": "NotFullyFunded",
+      "msg": "all six deposits are required"
+    },
+    {
+      "code": 6012,
+      "name": "RevisionMismatch",
+      "msg": "expected revision does not match current revision"
+    },
+    {
+      "code": 6013,
+      "name": "InvalidSelection",
+      "msg": "selection must contain one funded slot from each owner"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidCycle",
+      "msg": "cycle is not a complete three-party derangement"
+    },
+    {
+      "code": 6015,
+      "name": "AllocationHashMismatch",
+      "msg": "allocation hash does not match current proposal"
+    },
+    {
+      "code": 6016,
+      "name": "AlreadyLocked",
+      "msg": "participant already locked this revision"
+    },
+    {
+      "code": 6017,
+      "name": "NotLocked",
+      "msg": "participant has no matching lock"
+    },
+    {
+      "code": 6018,
+      "name": "DealFrozen",
+      "msg": "deal is frozen after the third lock"
+    },
+    {
+      "code": 6019,
+      "name": "NotFinalizable",
+      "msg": "live state is not finalizable"
+    },
+    {
+      "code": 6020,
+      "name": "CoreLiveMismatch",
+      "msg": "core and live accounts do not match"
+    },
+    {
+      "code": 6021,
+      "name": "InvalidDestination",
+      "msg": "destination ATA is invalid"
+    },
+    {
+      "code": 6022,
+      "name": "InvalidSettlementAccounts",
+      "msg": "settlement account ordering or identity is invalid"
+    },
+    {
+      "code": 6023,
+      "name": "AlreadySettled",
+      "msg": "room consequence has already completed"
+    },
+    {
+      "code": 6024,
+      "name": "NotExpired",
+      "msg": "room has not expired"
+    },
+    {
+      "code": 6025,
+      "name": "NotReturnable",
+      "msg": "asset is not returnable in this state"
+    },
+    {
+      "code": 6026,
+      "name": "AlreadyReturned",
+      "msg": "asset was already returned"
+    },
+    {
+      "code": 6027,
+      "name": "VaultNotFunded",
+      "msg": "vault does not hold the expected asset"
+    },
+    {
+      "code": 6028,
+      "name": "ArithmeticOverflow",
+      "msg": "arithmetic overflow"
+    },
+    {
+      "code": 6029,
+      "name": "SerializationFailed",
+      "msg": "account serialization failed"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidAccountOwner",
+      "msg": "unchecked account is not owned by TradeTable"
+    },
+    {
+      "code": 6031,
+      "name": "InvalidAccountPda",
+      "msg": "unchecked account does not match its canonical PDA"
+    }
+  ],
+  "types": [
+    {
+      "name": "AssetDeposited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetRecord",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "original_owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "original_ata",
+            "type": "pubkey"
+          },
+          {
+            "name": "final_ata",
+            "type": "pubkey"
+          },
+          {
+            "name": "deposited_at",
+            "type": "i64"
+          },
+          {
+            "name": "flags",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AssetReturned",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "slot",
+            "type": "u8"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CoreStatus",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Funding"
+          },
+          {
+            "name": "Active"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "Returning"
+          },
+          {
+            "name": "Complete"
+          },
+          {
+            "name": "Cancelled"
+          },
+          {
+            "name": "Closed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Cycle",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Forward"
+          },
+          {
+            "name": "Reverse"
+          }
+        ]
+      }
+    },
+    {
+      "name": "FinalizationScheduled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "allocation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiveAction",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Initialized"
+          },
+          {
+            "name": "Proposed"
+          },
+          {
+            "name": "Locked"
+          },
+          {
+            "name": "Revoked"
+          },
+          {
+            "name": "Finalized"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LiveDelegated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "live",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LivePhase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Negotiating"
+          },
+          {
+            "name": "Finalizing"
+          },
+          {
+            "name": "Finalized"
+          }
+        ]
+      }
+    },
+    {
+      "name": "LockChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "participant",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "locked",
+            "type": "bool"
+          },
+          {
+            "name": "lock_mask",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProposalChanged",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "selected_slots",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "cycle",
+            "type": {
+              "defined": {
+                "name": "Cycle"
+              }
+            }
+          },
+          {
+            "name": "allocation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomCancelled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "actor",
+            "type": "pubkey"
+          },
+          {
+            "name": "expired",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomCore",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "core_bump",
+            "type": "u8"
+          },
+          {
+            "name": "live_bump",
+            "type": "u8"
+          },
+          {
+            "name": "vault_authority_bump",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "room_nonce",
+            "type": "u64"
+          },
+          {
+            "name": "participants",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "live_room",
+            "type": "pubkey"
+          },
+          {
+            "name": "assets",
+            "type": {
+              "array": [
+                {
+                  "defined": {
+                    "name": "AssetRecord"
+                  }
+                },
+                6
+              ]
+            }
+          },
+          {
+            "name": "deposited_mask",
+            "type": "u8"
+          },
+          {
+            "name": "returned_mask",
+            "type": "u8"
+          },
+          {
+            "name": "selected_mask",
+            "type": "u8"
+          },
+          {
+            "name": "status",
+            "type": {
+              "defined": {
+                "name": "CoreStatus"
+              }
+            }
+          },
+          {
+            "name": "created_at",
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "settled_revision",
+            "type": "u64"
+          },
+          {
+            "name": "allocation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "rent_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomInitialized",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "live",
+            "type": "pubkey"
+          },
+          {
+            "name": "participants",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomLive",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "version",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "participants",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "selected_slots",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "cycle",
+            "type": {
+              "defined": {
+                "name": "Cycle"
+              }
+            }
+          },
+          {
+            "name": "destinations",
+            "type": {
+              "array": [
+                "u8",
+                3
+              ]
+            }
+          },
+          {
+            "name": "allocation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "locked_revision",
+            "type": {
+              "array": [
+                "u64",
+                3
+              ]
+            }
+          },
+          {
+            "name": "locked_hash",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                3
+              ]
+            }
+          },
+          {
+            "name": "lock_mask",
+            "type": "u8"
+          },
+          {
+            "name": "phase",
+            "type": {
+              "defined": {
+                "name": "LivePhase"
+              }
+            }
+          },
+          {
+            "name": "last_actor",
+            "type": "pubkey"
+          },
+          {
+            "name": "last_action",
+            "type": {
+              "defined": {
+                "name": "LiveAction"
+              }
+            }
+          },
+          {
+            "name": "updated_at",
+            "type": "i64"
+          },
+          {
+            "name": "reserved",
+            "type": {
+              "array": [
+                "u8",
+                64
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RoomSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "core",
+            "type": "pubkey"
+          },
+          {
+            "name": "revision",
+            "type": "u64"
+          },
+          {
+            "name": "allocation_hash",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "selected_mask",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
