@@ -1,0 +1,11 @@
+test-ledger/
+magicblock-test-storage/
+target/.rustc_info.json
+target/debug/
+target/deploy/
+target/release/
+target/sbpf-solana-solana/
+target/types/
+.playwright-cli/
+output/
+tests/

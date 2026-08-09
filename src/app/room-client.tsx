@@ -3,7 +3,7 @@
 import {AnchorProvider, BN, Idl, Program, Wallet} from "@coral-xyz/anchor";
 import {PublicKey, Transaction, VersionedTransaction} from "@solana/web3.js";
 import {useEffect, useMemo, useState} from "react";
-import idl from "../../target/idl/tradetable.json";
+import idl from "../idl/tradetable.json";
 import {baseConnection, isProjectionStale, livePda, programId, sendErWithFallback, subscribeAuthoritative} from "@/lib/tradetable";
 
 type InjectedWallet = {publicKey: PublicKey | null; connect(): Promise<{publicKey: PublicKey}>; signTransaction<T extends Transaction | VersionedTransaction>(value: T): Promise<T>; signAllTransactions<T extends Transaction | VersionedTransaction>(values: T[]): Promise<T[]>};
