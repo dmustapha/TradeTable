@@ -9,11 +9,9 @@ TradeTable is a three-party collectible barter protocol on Solana Devnet. Three 
 
 **Live:** https://tradetable-solana.vercel.app
 
-![TradeTable shared collectors table](docs/images/landing.png)
-
 ## Live Demo
 
-Open [TradeTable on Vercel](https://tradetable-solana.vercel.app) to inspect the earned room state without connecting a wallet. The [Proof Ledger](https://tradetable-solana.vercel.app/proof) links the public program, room accounts, settlement transaction, and three separate return transactions.
+Open [TradeTable on Vercel](https://tradetable-solana.vercel.app) to create a room, resolve any verified RoomCore, or enter the [earned Devnet room](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo). Its [room-scoped proof ledger](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo/proof) links the public program, room accounts, settlement transaction, and three separate return transactions.
 
 ## What Is TradeTable?
 
@@ -22,12 +20,6 @@ Sequential three-way transfers force someone to move first. TradeTable replaces 
 Each of three fixed participants deposits two eligible classic SPL collectibles. The group chooses one asset per owner and a forward or reverse cycle. Every new proposal clears prior locks. The third matching lock freezes the deal.
 
 Exactly three selected assets settle atomically. Three unselected assets return separately. Public Devnet evidence uses commit-only ER finalization followed by a base settlement transaction.
-
-## Screenshots
-
-| Shared table | Proof ledger |
-|---|---|
-| ![Three collector seats and exact-revision locks](docs/images/landing.png) | ![Commit, settlement, and return evidence](docs/images/proof-ledger.png) |
 
 ## Features
 
@@ -88,20 +80,28 @@ The composed Magic Action path has local-validator evidence. It is not presented
 
 ## Testing
 
-Run the full program and behavioral gate:
+Run the deterministic frontend behavior gate:
+
+```bash
+npm run test:frontend
+npm run typecheck
+npm run build
+```
+
+Run the full Anchor program and behavioral gate when a local validator and ER are available:
 
 ```bash
 npm test
 ```
 
-The verified pipeline passed 12 behavioral acceptance checks, 43 debug checks, and 147 grouped stress cases. Tests cover eligibility, authorization, revision races, settlement account substitution, cancellation, expiry, deterministic returns, client routing, and proof integrity.
+The redesigned frontend gate contains 97 deterministic tests. The protocol pipeline also passed its behavioral, debug, wire, and stress suites. Coverage includes eligibility, authorization, revision races, settlement account substitution, cancellation, expiry, deterministic returns, client routing, pending-write reconciliation, wallet changes, and proof integrity.
 
 ## Try It (3 minutes)
 
 1. Open the [live app](https://tradetable-solana.vercel.app).
-2. Read `6 IN -> 3 TRADE + 3 RETURN` at the top of the table.
-3. Inspect the three participant seats, selected cards, revision seal, and three locks.
-4. Open the [Proof Ledger](https://tradetable-solana.vercel.app/proof).
+2. Choose **Open earned demo** to enter the verified room route.
+3. Inspect the six custody slots, authoritative revision, selected cards, and three exact locks.
+4. Open the room's [Proof Ledger](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo/proof).
 5. Follow the base settlement signature to Solana Explorer.
 6. Verify that it contains the selected three transfers.
 7. Compare the three separate return signatures.
@@ -156,13 +156,17 @@ Public defaults are documented in [`.env.example`](.env.example). Never commit a
 ## Project Structure
 
 ```text
-src/app/                 Next.js judge and collaboration surfaces
-src/lib/tradetable.ts    Account decoding, routing, and transactions
-src/idl/                 Generated program interface
-programs/tradetable/     Anchor program
-scripts/ops.ts           Seed, measure, and proof commands
-tests/                   Contract, client, and security tests
-submission/              Public Devnet proof and measurements
+src/app/rooms/[core]/       Verified room workspace and proof routes
+src/app/room-client.tsx     Reactive lifecycle and action workspace
+src/lib/room-state.ts       Canonical decoders and legal UI state derivation
+src/lib/room-actions.ts     Instruction builders and pending postconditions
+src/lib/room-loader.ts      Server-side account validation and authority loading
+src/lib/tradetable.ts       RPC transports, subscriptions, PDAs, and hashes
+src/idl/                    Generated program interface
+programs/tradetable/        Anchor program
+scripts/ops.ts              Seed, measure, and proof commands
+tests/ui/                   Deterministic redesign behavior tests
+submission/                 Public Devnet proof and measurements
 ```
 
 Built for [Solana Blitz v7](https://build.magicblock.app/?event=10&stage=blitz) with MagicBlock.

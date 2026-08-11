@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {test} from "node:test";
 import {
+  destinations,
   pendingPostconditionMet,
   primaryThenFallback,
   selectedSlotsFromChoices,
@@ -15,10 +16,8 @@ test("one chain-derived slot per owner and either cycle form the proposal", () =
   assert.deepEqual(selectedSlotsFromChoices([1, 0, 1]), [1, 2, 5]);
   assert.deepEqual(selectedSlotsFromChoices([0, 1, 0]), [0, 3, 4]);
   assert.throws(() => selectedSlotsFromChoices([0, 2, 0]), /choice/);
-  const client = source("src/app/room-client.tsx");
-  assert.match(client, /SET CYCLE: FORWARD/);
-  assert.match(client, /SET CYCLE: REVERSE/);
-  assert.match(client, /selectedSlotsFromChoices\(choices\)/);
+  assert.deepEqual(destinations("forward"), [1, 2, 0]);
+  assert.deepEqual(destinations("reverse"), [2, 0, 1]);
 });
 
 test("pending proposal completion requires its exact authoritative result", () => {
@@ -54,11 +53,15 @@ test("network timeout, loading boundary, and retry boundary are explicit", async
   assert.match(source("src/lib/tradetable.ts"), /AbortSignal\.timeout/);
 });
 
-test("mode controls are proof-path selectors and never imply a transaction send", () => {
+test("landing routes to room-scoped proof and never constructs a consequence", () => {
   const page = source("src/app/page.tsx");
-  assert.match(page, /PROOF PATH SELECTOR/);
-  assert.match(page, /does not send a transaction/);
-  assert.doesNotMatch(page, />CONSEQUENCE ROUTER</);
+  const proof = source("src/app/rooms/[core]/proof/page.tsx");
+  assert.match(page, /href="\/proof"/);
+  assert.match(page, /Open earned demo/);
+  assert.doesNotMatch(page, /sendBase|sendErWithFallback|CONSEQUENCE ROUTER/);
+  assert.match(proof, /canonicalRoomAddress/);
+  assert.match(proof, /loadRoom/);
+  assert.match(proof, /buildRoomEvidence/);
 });
 
 test("proof worker validates exact settlement semantics before writing evidence", () => {
