@@ -185,18 +185,34 @@ test("room expiry rejects the exact twenty-minute edge and accepts twenty-one mi
 });
 
 test("landing is routing-only and preserves truthful settlement boundaries", async () => {
-  const source = await readFile(new URL("../../src/app/page.tsx", import.meta.url), "utf8");
+  const [source, navigation] = await Promise.all([
+    readFile(new URL("../../src/app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/app/site-nav.tsx", import.meta.url), "utf8"),
+  ]);
   assert.match(source, /Six assets enter custody/i);
   assert.match(source, /selected three settle atomically/i);
   assert.match(source, /three separate base transactions/i);
-  assert.match(source, /CreateRoomForm/);
-  assert.match(source, /OpenRoomForm/);
-  assert.match(source, /NEXT_PUBLIC_NETWORK_LABEL/);
+  assert.match(source, /href="\/create"/);
+  assert.match(source, /href="\/open"/);
+  assert.doesNotMatch(source, /CreateRoomForm/);
+  assert.doesNotMatch(source, /OpenRoomForm/);
+  assert.match(navigation, /NEXT_PUBLIC_NETWORK_LABEL/);
   assert.match(source, /NEXT_PUBLIC_DEMO_ROOM/);
-  assert.match(source, /20-minute protocol minimum/i);
-  assert.match(source, /one-minute submission buffer/i);
   assert.doesNotMatch(source, /className="live"/);
   assert.doesNotMatch(source, /tradeTable|PROOF PATH SELECTOR|RoomClient/);
+});
+
+test("creation and room lookup have dedicated routes", async () => {
+  const [create, open] = await Promise.all([
+    readFile(new URL("../../src/app/create/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../../src/app/open/page.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(create, /CreateRoomForm/);
+  assert.match(create, /20-minute protocol minimum/i);
+  assert.match(create, /one-minute submission buffer/i);
+  assert.doesNotMatch(create, /OpenRoomForm/);
+  assert.match(open, /OpenRoomForm/);
+  assert.doesNotMatch(open, /CreateRoomForm/);
 });
 
 test("room route has controlled route shells and validated loading", async () => {

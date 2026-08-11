@@ -178,7 +178,7 @@ export default function CreateRoomForm() {
   const pending = !workflow.canSubmit;
   const status = workflowStatus(workflow);
   const clearField = (field: CreateField) => setFieldErrors(current => ({...current, [field]: undefined}));
-  return <form className="controlRail" onSubmit={event => void create(event)}>
+  return <form className="controlRail" onSubmit={event => void create(event)} noValidate>
     <p>Participant A is the connected creator wallet.</p>
     <label htmlFor="participant-b">Participant B wallet</label>
     <input id="participant-b" aria-invalid={Boolean(fieldErrors.participantB)} aria-describedby={fieldErrors.participantB ? "participant-b-error" : undefined} value={participantB} onChange={event => {setParticipantB(event.target.value); clearField("participantB");}} disabled={pending} required />

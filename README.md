@@ -13,6 +13,8 @@ TradeTable is a three-party collectible barter protocol on Solana Devnet. Three 
 
 Open [TradeTable on Vercel](https://tradetable-solana.vercel.app) to create a room, resolve any verified RoomCore, or enter the [earned Devnet room](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo). Its [room-scoped proof ledger](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo/proof) links the public program, room accounts, settlement transaction, and three separate return transactions.
 
+The landing page explains the protocol without mounting an application form. Create and Open each have a dedicated route.
+
 ## What Is TradeTable?
 
 Sequential three-way transfers force someone to move first. TradeTable replaces that first-mover risk with revision-bound consensus and program-controlled custody.
@@ -20,6 +22,16 @@ Sequential three-way transfers force someone to move first. TradeTable replaces 
 Each of three fixed participants deposits two eligible classic SPL collectibles. The group chooses one asset per owner and a forward or reverse cycle. Every new proposal clears prior locks. The third matching lock freezes the deal.
 
 Exactly three selected assets settle atomically. Three unselected assets return separately. Public Devnet evidence uses commit-only ER finalization followed by a base settlement transaction.
+
+## Screenshots
+
+| Landing | Create room |
+|---|---|
+| ![TradeTable landing](docs/images/landing.png) | ![Create-room route](docs/images/create.png) |
+
+| Open room | Mobile landing |
+|---|---|
+| ![Open-room route](docs/images/open.png) | ![TradeTable mobile landing](docs/images/landing-mobile.png) |
 
 ## Features
 
@@ -84,6 +96,8 @@ Run the deterministic frontend behavior gate:
 
 ```bash
 npm run test:frontend
+npm run test:browser
+npm run test:browser:production
 npm run typecheck
 npm run build
 ```
@@ -94,12 +108,12 @@ Run the full Anchor program and behavioral gate when a local validator and ER ar
 npm test
 ```
 
-The redesigned frontend gate contains 97 deterministic tests. The protocol pipeline also passed its behavioral, debug, wire, and stress suites. Coverage includes eligibility, authorization, revision races, settlement account substitution, cancellation, expiry, deterministic returns, client routing, pending-write reconciliation, wallet changes, and proof integrity.
+The frontend gate contains 101 deterministic tests. Playwright adds 32 desktop/mobile lifecycle checks and 18 read-only production checks. The protocol pipeline also passed its behavioral, debug, wire, and stress suites. Coverage includes eligibility, authorization, revision races, settlement account substitution, cancellation, expiry, deterministic returns, client routing, pending-write reconciliation, wallet changes, and proof integrity.
 
 ## Try It (3 minutes)
 
 1. Open the [live app](https://tradetable-solana.vercel.app).
-2. Choose **Open earned demo** to enter the verified room route.
+2. Choose **Earned demo** to enter the verified room route.
 3. Inspect the six custody slots, authoritative revision, selected cards, and three exact locks.
 4. Open the room's [Proof Ledger](https://tradetable-solana.vercel.app/rooms/9uxuWPcyhqAh2U6zhVPQnMeHVsqjE1yvseErgboq6DTo/proof).
 5. Follow the base settlement signature to Solana Explorer.
@@ -156,6 +170,9 @@ Public defaults are documented in [`.env.example`](.env.example). Never commit a
 ## Project Structure
 
 ```text
+src/app/page.tsx               Navigation-only landing page
+src/app/create/                Dedicated room-creation route
+src/app/open/                  Dedicated verified-room lookup route
 src/app/rooms/[core]/       Verified room workspace and proof routes
 src/app/room-client.tsx     Reactive lifecycle and action workspace
 src/lib/room-state.ts       Canonical decoders and legal UI state derivation
@@ -166,6 +183,8 @@ src/idl/                    Generated program interface
 programs/tradetable/        Anchor program
 scripts/ops.ts              Seed, measure, and proof commands
 tests/ui/                   Deterministic redesign behavior tests
+tests/browser/              Desktop and mobile lifecycle browser tests
+tests/browser-production/   Canonical production read-only checks
 submission/                 Public Devnet proof and measurements
 ```
 

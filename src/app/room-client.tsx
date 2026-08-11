@@ -42,7 +42,7 @@ type InjectedWallet = {
 };
 declare global {interface Window {solana?: InjectedWallet}}
 
-type Props = {room: string; initialCore: RoomCore; initialLive: RoomLive; initialAuthority: "magicblock-er" | "solana-base"; initialDelegated?: boolean; initialObservedAt: number};
+type Props = {room: string; initialCore: RoomCore; initialLive: RoomLive; initialAuthority: "magicblock-er" | "solana-base"; initialDelegated?: boolean; initialObservedAt: number; initialPending?: PendingWrite; initialSignedRecovery?: SignedIntent; testFixture?: boolean};
 type Projection = {core: RoomCore; live: RoomLive; coreSource: string; liveSource: string; delegated: boolean; coreObservedAt: number; liveObservedAt: number};
 type ActionInput = {slot?: number; mint?: string};
 
@@ -188,12 +188,12 @@ export default function RoomClient(props: Props) {
     coreObservedAt: props.initialObservedAt, liveObservedAt: props.initialObservedAt}));
   const [draft, setDraft] = useState(() => authorityDraft(props.initialLive));
   const [wallet, setWallet] = useState<WalletState>(() => reduceWallet({status: "disconnected", address: null}, {type: "available"}, props.initialCore.participants, true));
-  const [pending, setPending] = useState<PendingWrite | null>(null);
+  const [pending, setPending] = useState<PendingWrite | null>(props.initialPending ?? null);
   const [mintInputs, setMintInputs] = useState<Record<number, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [rpcReady, setRpcReady] = useState(true);
-  const [signedRecovery, setSignedRecovery] = useState<SignedIntent | null>(null);
+  const [signedRecovery, setSignedRecovery] = useState<SignedIntent | null>(props.initialSignedRecovery ?? null);
   const [verification, setVerification] = useState<string | null>(null);
   const walletGeneration = useRef(0);
   const writeMutex = useRef<WriteMutex>({locked: false});
@@ -204,7 +204,7 @@ export default function RoomClient(props: Props) {
   liveRef.current = projection.live;
   const rosterKey = projection.core.participants.map(value => new PublicKey(value).toBase58()).join(":");
 
-  useAuthoritySubscription(coreAddress, liveAddress, setProjection, setRpcReady, refreshAuthority, lastAuthorityAt, latestAuthority);
+  useAuthoritySubscription(coreAddress, liveAddress, setProjection, setRpcReady, refreshAuthority, lastAuthorityAt, latestAuthority, props.testFixture);
   useWalletLifecycle(projection.core.participants, rosterKey, walletGeneration, setWallet, setDraft, liveRef, setPending);
 
   const observedAt = Math.min(projection.coreObservedAt, projection.liveObservedAt);
@@ -235,6 +235,7 @@ export default function RoomClient(props: Props) {
   }
 
   async function submit(action: PendingAction, input: ActionInput = {}) {
+    if (props.testFixture) {setError("Deterministic browser fixtures never sign or broadcast."); return;}
     if (isBlockingPending(pending) || !acquireWriteMutex(writeMutex.current)) return;
     setPending(null); setError(null); setSignedRecovery(null); setVerification(null);
     let signed = false;
@@ -287,13 +288,14 @@ export default function RoomClient(props: Props) {
   </section>;
 }
 
-function useAuthoritySubscription(core: PublicKey, live: PublicKey, setProjection: React.Dispatch<React.SetStateAction<Projection>>, setReady: React.Dispatch<React.SetStateAction<boolean>>, refreshRef: React.MutableRefObject<() => Promise<void>>, lastAuthorityAt: React.MutableRefObject<{core: number; live: number}>, latestAuthority: React.MutableRefObject<{core: RoomCore; live: RoomLive}>) {
+function useAuthoritySubscription(core: PublicKey, live: PublicKey, setProjection: React.Dispatch<React.SetStateAction<Projection>>, setReady: React.Dispatch<React.SetStateAction<boolean>>, refreshRef: React.MutableRefObject<() => Promise<void>>, lastAuthorityAt: React.MutableRefObject<{core: number; live: number}>, latestAuthority: React.MutableRefObject<{core: RoomCore; live: RoomLive}>, disabled = false) {
   useEffect(() => {
+    if (disabled) return;
     const stop = subscribeAuthoritative(core, live, (data, source) => {const decoded = decodeRoomCore(data); latestAuthority.current.core = decoded; lastAuthorityAt.current.core = Date.now(); setReady(true); setProjection(current => ({...current, core: decoded, coreSource: source, coreObservedAt: Date.now()}));},
       (data, source) => {const decoded = decodeRoomLive(data); latestAuthority.current.live = decoded; lastAuthorityAt.current.live = Date.now(); setReady(true); setProjection(current => ({...current, live: decoded, liveSource: source, delegated: sourceAuthority(source) === "magicblock-er", liveObservedAt: Date.now()}));}, ready => setReady(ready));
     refreshRef.current = () => stop.refresh();
     return () => {refreshRef.current = () => Promise.resolve(); void stop();};
-  }, [core, lastAuthorityAt, latestAuthority, live, refreshRef, setProjection, setReady]);
+  }, [core, disabled, lastAuthorityAt, latestAuthority, live, refreshRef, setProjection, setReady]);
 }
 
 function useWalletLifecycle(participants: RoomCore["participants"], rosterKey: string, generation: React.MutableRefObject<number>, setWallet: React.Dispatch<React.SetStateAction<WalletState>>, setDraft: React.Dispatch<React.SetStateAction<WorkspaceDraft>>, live: React.MutableRefObject<RoomLive>, setPending: React.Dispatch<React.SetStateAction<PendingWrite | null>>) {

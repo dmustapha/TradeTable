@@ -1,7 +1,8 @@
 import type {Metadata} from "next";
-import {IBM_Plex_Mono} from "next/font/google";
+import {DM_Serif_Display, IBM_Plex_Mono} from "next/font/google";
 import "./globals.css";
 
+const display = DM_Serif_Display({subsets: ["latin"], weight: "400", variable: "--font-display-loaded"});
 const mono = IBM_Plex_Mono({subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono-loaded"});
 
 export const metadata: Metadata = {
@@ -10,5 +11,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({children}: Readonly<{children: React.ReactNode}>) {
-  return <html className={mono.variable} lang="en"><body>{children}</body></html>;
+  return <html className={`${display.variable} ${mono.variable}`} lang="en"><body>{children}</body></html>;
 }
