@@ -16,19 +16,21 @@ function contrast(left: string, right: string): number {
   return (values[0] + .05) / (values[1] + .05);
 }
 
-test("declares the approved warm operational design tokens and type roles", async () => {
+test("restores the approved midnight and acid-chartreuse identity", async () => {
   const [css, layout] = await Promise.all([
     readFile(cssUrl, "utf8"),
     readFile(layoutUrl, "utf8"),
   ]);
 
-  for (const token of ["--paper:", "--ink:", "--surface:", "--coral:", "--green:", "--shadow-pixel:", "--font-sans:", "--font-mono:"]) {
+  for (const token of ["--night:", "--panel:", "--paper:", "--ink:", "--line:", "--acid:", "--coral:", "--shadow-glow:", "--font-display:", "--font-mono:"]) {
     assert.match(css, new RegExp(token), `missing ${token}`);
   }
-  assert.match(css, /body\s*\{[^}]*font-family:\s*var\(--font-sans\)/s);
+  assert.match(css, /color-scheme:\s*dark/);
+  assert.match(css, /body\s*\{[^}]*font-family:\s*var\(--font-mono\)/s);
+  assert.match(css, /h1,[\s\S]*?h3\s*\{[^}]*font-family:\s*var\(--font-display\)/s);
   assert.match(css, /:where\(code[^}]*font-family:\s*var\(--font-mono\)/s);
-  assert.doesNotMatch(layout, /DM_Serif_Display|serif/i);
-  assert.doesNotMatch(css, /(?:linear|radial|conic)-gradient/i);
+  assert.match(layout, /DM_Serif_Display/);
+  assert.match(css, /radial-gradient/i);
 });
 
 test("keeps interaction geometry stable and accessible", async () => {
@@ -59,7 +61,7 @@ test("styles authority, conflict, pending, alert, and terminal states without co
 
 test("uses a visible divider and keeps the room table near the top", async () => {
   const css = await readFile(cssUrl, "utf8");
-  const paper = css.match(/--paper:\s*(#[0-9a-f]{6})/i)?.[1];
+  const paper = css.match(/--night:\s*(#[0-9a-f]{6})/i)?.[1];
   const line = css.match(/--line:\s*(#[0-9a-f]{6})/i)?.[1];
   assert.ok(paper && line);
   assert.ok(contrast(paper, line) >= 3, `line contrast was ${contrast(paper, line)}`);
@@ -73,6 +75,6 @@ test("recomposes at phone width without hiding proof actions and respects reduce
   assert.match(css, /@media\s*\(max-width:\s*600px\)/);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\*,\s*\*::before,\s*\*::after/s);
   assert.doesNotMatch(css, /\.timeline\s+li\s+a[^}]*display:\s*none/s);
-  assert.doesNotMatch(css, /transition\s*:\s*all|\blinear\b|scale\(0\)/i);
+  assert.doesNotMatch(css, /transition\s*:\s*all|(?:transition|animation)[^;]*\blinear\b|scale\(0\)/i);
   assert.doesNotMatch(css, /scroll-behavior:\s*smooth/i);
 });

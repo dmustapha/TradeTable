@@ -10,6 +10,8 @@
     "test:room-state": "tsx --test tests/ui/room-state.test.ts",
     "test:frontend": "tsx --test tests/ui/*.test.ts",
     "test:ui": "tsx --test tests/ui/*.test.ts",
+    "test:browser": "playwright test",
+    "test:browser:production": "playwright test -c playwright.production.config.ts",
     "test": "anchor idl build -o target/idl/tradetable.json && anchor build --no-idl -- --tools-version v1.54 && anchor test --skip-build --skip-deploy --skip-local-validator",
     "seed": "tsx scripts/ops.ts seed",
     "measure": "tsx scripts/ops.ts measure",
@@ -26,6 +28,7 @@
     "react-dom": "19.1.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@types/node": "24.2.1",
     "@types/react": "19.1.10",
     "@types/react-dom": "19.1.7",
