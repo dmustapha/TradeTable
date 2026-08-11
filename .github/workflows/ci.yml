@@ -13,6 +13,8 @@ jobs:
           node-version: 24.10.0
           cache: npm
       - uses: dtolnay/rust-toolchain@1.85.0
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev pkg-config
       - name: Install Solana CLI
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v2.3.13/install)"
