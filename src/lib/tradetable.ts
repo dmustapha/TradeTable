@@ -12,7 +12,14 @@ export const ROUTER_RPC = process.env.NEXT_PUBLIC_MAGIC_ROUTER_RPC ?? "https://d
 export const ROUTER_WS = process.env.NEXT_PUBLIC_MAGIC_ROUTER_WS ?? "wss://devnet-router.magicblock.app";
 export const ER_RPC = process.env.NEXT_PUBLIC_MAGIC_ER_RPC ?? "https://devnet-as.magicblock.app/";
 export const ER_WS = process.env.NEXT_PUBLIC_MAGIC_ER_WS ?? "wss://devnet-as.magicblock.app/";
-export const ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
+const LOCAL_ER_VALIDATOR = new PublicKey("mAGicPQYBMvcYveUZA5F5UNNwyHvfYh5xkLS2Fr1mev");
+const DEVNET_ER_VALIDATOR = new PublicKey("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
+
+export function erValidatorForBase(endpoint: string): PublicKey {
+  return isLocalRpcEndpoint(endpoint) ? LOCAL_ER_VALIDATOR : DEVNET_ER_VALIDATOR;
+}
+
+export const ER_VALIDATOR = erValidatorForBase(BASE_RPC);
 
 export function programId(): PublicKey {
   const value = process.env.NEXT_PUBLIC_PROGRAM_ID;
@@ -66,7 +73,9 @@ export const emptyWatermarks = (): SourceWatermarks => ({"base-ws": 0, "base-pol
 export const basePollSource = (usingFallback: boolean): AuthoritySource => usingFallback ? "base-fallback-poll" : "base-poll";
 
 export function acceptSourceSlot(watermarks: SourceWatermarks, source: AuthoritySource, slot: number): boolean {
-  if (slot < watermarks[source]) return false;
+  const domain = source.startsWith("base-") ? ["base-ws", "base-poll", "base-fallback-poll"] as AuthoritySource[]
+    : ["router-ws", "router-poll", "er-ws", "er-poll"] as AuthoritySource[];
+  if (slot < Math.max(...domain.map(candidate => watermarks[candidate]))) return false;
   watermarks[source] = slot;
   return true;
 }
@@ -184,42 +193,135 @@ async function accountAwareRouterBlockhash(instruction: TransactionInstruction):
 }
 
 export async function sendBase(connection: Connection, wallet: Wallet, instruction: TransactionInstruction): Promise<string> {
-  const endpoints = [connection, ...(BASE_RPC_FALLBACK ? [new Connection(BASE_RPC_FALLBACK, "confirmed")] : [])];
-  let lastError: unknown;
-  for (const endpoint of endpoints) {
-    try {
-      const transaction = new Transaction().add(instruction);
-      transaction.feePayer = wallet.publicKey;
-      transaction.recentBlockhash = (await withTimeout(endpoint.getLatestBlockhash("confirmed"), 10_000, "base blockhash read")).blockhash;
-      const signed = await wallet.signTransaction(transaction);
-      return await withTimeout(endpoint.sendRawTransaction(signed.serialize(), {skipPreflight: false}), 20_000, "base transaction send");
-    } catch (error) { lastError = error; }
-  }
-  throw lastError;
+  return sendBaseInstructions(connection, wallet, [instruction]);
 }
 
-export async function sendErWithFallback(wallet: Wallet, instruction: TransactionInstruction): Promise<string> {
-  const transaction = new Transaction().add(instruction);
-  transaction.feePayer = wallet.publicKey;
-  let routerFailure: unknown;
+async function baseBlockhashEndpoint(primary: Connection, fallback?: Connection): Promise<{connection: Connection; blockhash: string}> {
   try {
-    transaction.recentBlockhash = await accountAwareRouterBlockhash(instruction);
-  } catch (error) { return sendDirectEr(wallet, instruction, error); }
-  const signed = await wallet.signTransaction(transaction);
-  try { return await withTimeout(routerConnection().sendRawTransaction(signed.serialize(), {skipPreflight: true}), 20_000, "router transaction send"); }
-  catch (error) { routerFailure = error; }
-  return sendDirectEr(wallet, instruction, routerFailure);
+    const value = await withTimeout(primary.getLatestBlockhash("confirmed"), 10_000, "base blockhash read");
+    return {connection: primary, blockhash: value.blockhash};
+  } catch (error) {
+    if (!fallback) throw error;
+    const value = await withTimeout(fallback.getLatestBlockhash("confirmed"), 10_000, "fallback base blockhash read");
+    return {connection: fallback, blockhash: value.blockhash};
+  }
 }
 
-async function sendDirectEr(wallet: Wallet, instruction: TransactionInstruction, routerError: unknown): Promise<string> {
-  const er = directErConnection();
+export async function sendBaseInstructions(connection: Connection, wallet: Wallet, instructions: TransactionInstruction[], fallbackConnection?: Connection, onSigned?: (intent: SignedIntent) => void): Promise<string> {
+  if (!instructions.length) throw new Error("at least one base instruction is required");
+  const configuredFallback = fallbackConnection ?? (BASE_RPC_FALLBACK ? new Connection(BASE_RPC_FALLBACK, "confirmed") : undefined);
+  const selected = await baseBlockhashEndpoint(connection, configuredFallback);
+  const transaction = new Transaction().add(...instructions);
+  transaction.feePayer = wallet.publicKey;
+  transaction.recentBlockhash = selected.blockhash;
+  const signed = await wallet.signTransaction(transaction);
+  if (signed.signature) onSigned?.({signature: base58Encode(signed.signature), endpoint: "base", recentBlockhash: selected.blockhash, rpcUrl: selected.connection.rpcEndpoint});
+  try { return await withTimeout(selected.connection.sendRawTransaction(signed.serialize(), {skipPreflight: false}), 20_000, "base transaction send"); }
+  catch (error) {
+    if (!signed.signature) throw error;
+    const signature = base58Encode(signed.signature);
+    if (deterministicSendRejection(error)) throw new SignedTransactionRejectedError(signature, "base", selected.blockhash, selected.connection.rpcEndpoint, error);
+    throw new AmbiguousBroadcastError(signature, "base", selected.blockhash, selected.connection.rpcEndpoint, error);
+  }
+}
+
+export type ErTransport = {
+  routerBlockhash(instruction: TransactionInstruction): Promise<string>;
+  directBlockhash(): Promise<string>;
+  sendRouter(transaction: Transaction): Promise<string>;
+  sendDirect(transaction: Transaction): Promise<string>;
+};
+const BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+function base58Encode(bytes: Uint8Array): string {
+  let zeros = 0;
+  while (zeros < bytes.length && bytes[zeros] === 0) zeros += 1;
+  const digits: number[] = [];
+  for (let index = zeros; index < bytes.length; index += 1) {
+    let carry = bytes[index];
+    for (let digit = 0; digit < digits.length; digit += 1) {
+      carry += digits[digit] * 256;
+      digits[digit] = carry % 58;
+      carry = Math.floor(carry / 58);
+    }
+    while (carry) { digits.push(carry % 58); carry = Math.floor(carry / 58); }
+  }
+  return "1".repeat(zeros) + digits.reverse().map(value => BASE58_ALPHABET[value]).join("");
+}
+
+export type SignedEndpoint = "base" | "router" | "direct";
+export type SignedIntent = {signature: string; endpoint: SignedEndpoint; recentBlockhash: string; rpcUrl: string};
+
+export class AmbiguousBroadcastError extends Error {
+  constructor(public readonly signature: string, public readonly endpoint: SignedEndpoint, public readonly recentBlockhash: string, public readonly rpcUrl: string, cause: unknown) {
+    super(`${endpoint} broadcast outcome is ambiguous for signed transaction ${signature}`, {cause});
+  }
+}
+
+export class SignedTransactionRejectedError extends Error {
+  constructor(public readonly signature: string, public readonly endpoint: SignedEndpoint, public readonly recentBlockhash: string, public readonly rpcUrl: string, cause: unknown) {
+    super(`${endpoint} rejected signed transaction ${signature}`, {cause});
+  }
+}
+
+function deterministicSendRejection(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /simulation failed|custom program error|instruction error|signature verification|blockhash not found/i.test(message);
+}
+
+export function ambiguousBroadcastSignature(error: unknown): string | null {
+  return error instanceof AmbiguousBroadcastError ? error.signature : null;
+}
+
+async function selectErEndpoint(instruction: TransactionInstruction, transport: ErTransport) {
+  try { return {kind: "router" as const, blockhash: await transport.routerBlockhash(instruction)}; }
+  catch { return {kind: "direct" as const, blockhash: await transport.directBlockhash()}; }
+}
+
+export async function sendErWithTransport(wallet: Wallet, instruction: TransactionInstruction, transport: ErTransport, onSigned?: (intent: SignedIntent) => void): Promise<string> {
+  const selected = await selectErEndpoint(instruction, transport);
   const transaction = new Transaction().add(instruction);
   transaction.feePayer = wallet.publicKey;
-  transaction.recentBlockhash = (await withTimeout(er.getLatestBlockhash("confirmed"), 10_000, "direct ER blockhash read")).blockhash;
+  transaction.recentBlockhash = selected.blockhash;
   const signed = await wallet.signTransaction(transaction);
-  const signature = await withTimeout(er.sendRawTransaction(signed.serialize(), {skipPreflight: true}), 20_000, "direct ER transaction send");
-  console.warn("router send failed; direct ER used", routerError);
-  return signature;
+  if (signed.signature) onSigned?.({signature: base58Encode(signed.signature), endpoint: selected.kind, recentBlockhash: selected.blockhash, rpcUrl: selected.kind === "router" ? ROUTER_RPC : ER_RPC});
+  try { return await (selected.kind === "router" ? transport.sendRouter(signed) : transport.sendDirect(signed)); }
+  catch (error) {
+    if (!signed.signature) throw error;
+    const signature = base58Encode(signed.signature);
+    const rpcUrl = selected.kind === "router" ? ROUTER_RPC : ER_RPC;
+    if (deterministicSendRejection(error)) throw new SignedTransactionRejectedError(signature, selected.kind, selected.blockhash, rpcUrl, error);
+    throw new AmbiguousBroadcastError(signature, selected.kind, selected.blockhash, rpcUrl, error);
+  }
+}
+
+export function sendErWithFallback(wallet: Wallet, instruction: TransactionInstruction, onSigned?: (intent: SignedIntent) => void): Promise<string> {
+  const router = routerConnection();
+  const direct = directErConnection();
+  return sendErWithTransport(wallet, instruction, {
+    routerBlockhash: accountAwareRouterBlockhash,
+    directBlockhash: async () => (await withTimeout(direct.getLatestBlockhash("confirmed"), 10_000, "direct ER blockhash read")).blockhash,
+    sendRouter: transaction => withTimeout(router.sendRawTransaction(transaction.serialize(), {skipPreflight: true}), 20_000, "router transaction send"),
+    sendDirect: transaction => withTimeout(direct.sendRawTransaction(transaction.serialize(), {skipPreflight: true}), 20_000, "direct ER transaction send"),
+  }, onSigned);
+}
+
+export type SignedOutcomeReader = {signatureStatus(signature: string): Promise<{err: unknown} | null>; blockhashValid(blockhash: string): Promise<boolean>};
+function connectionOutcomeReader(connection: Connection): SignedOutcomeReader {
+  return {signatureStatus: async signature => {
+    const status = (await connection.getSignatureStatuses([signature], {searchTransactionHistory: true})).value[0];
+    return status ? {err: status.err} : null;
+  }, blockhashValid: async blockhash => (await connection.isBlockhashValid(blockhash, {commitment: "confirmed"})).value};
+}
+
+export async function readSignedOutcome(intent: SignedIntent, injected?: SignedOutcomeReader): Promise<{status: {err: unknown} | null; blockhashValid: boolean | null}> {
+  const reader = injected ?? connectionOutcomeReader(new Connection(intent.rpcUrl, "confirmed"));
+  let status: {err: unknown} | null = null;
+  try { status = await reader.signatureStatus(intent.signature); }
+  catch { return {status: null, blockhashValid: null}; }
+  if (status) return {status: {err: status.err}, blockhashValid: null};
+  try { return {status: null, blockhashValid: await reader.blockhashValid(intent.recentBlockhash)}; }
+  catch { return {status: null, blockhashValid: null}; }
 }
 
 export function subscribeAuthoritative(
@@ -227,7 +329,8 @@ export function subscribeAuthoritative(
   live: PublicKey,
   onCore: (data: Buffer, source: AuthoritySource) => void,
   onLive: (data: Buffer, source: AuthoritySource) => void,
-): () => Promise<void> {
+  onHealth?: (ready: boolean, error?: unknown) => void,
+): (() => Promise<void>) & {refresh(): Promise<void>} {
   const base = baseConnection();
   const baseFallback = BASE_RPC_FALLBACK ? new Connection(BASE_RPC_FALLBACK, "confirmed") : null;
   const router = routerSubscriptionConnection();
@@ -238,6 +341,7 @@ export function subscribeAuthoritative(
   let delegated = false;
   let directValidator = false;
   let pollFailureReported = false;
+  let inFlight: Promise<void> | null = null;
   const publishCore = (data: Buffer, source: AuthoritySource, slot: number) => { if (active && acceptSourceSlot(coreWatermarks, source, slot)) onCore(data, source); };
   const publishLive = (data: Buffer, source: AuthoritySource, slot: number) => {
     if (active && liveSourceIsAuthoritative(source, delegated, directValidator) && acceptSourceSlot(liveWatermarks, source, slot)) onLive(data, source);
@@ -282,16 +386,27 @@ export function subscribeAuthoritative(
       if (result?.value) publishLive(result.value.data, directValidator ? "er-poll" : "router-poll", result.context.slot);
     }
     pollFailureReported = false;
+    if (active) onHealth?.(true);
   };
-  const pollId = setInterval(() => { void poll().catch(error => {
+  const refresh = () => {
+    if (!active) return Promise.resolve();
+    if (inFlight) return inFlight;
+    inFlight = poll().catch(error => {
+      if (active) onHealth?.(false, error);
     if (!pollFailureReported) console.warn("authority poll failed; projection will become stale", error);
     pollFailureReported = true;
-  }); }, 1_000);
-  return async () => {
+    }).finally(() => {inFlight = null;});
+    return inFlight;
+  };
+  const pollId = setInterval(() => {void refresh();}, 1_000);
+  void refresh();
+  const stop = async () => {
     active = false;
     clearInterval(pollId);
     await Promise.allSettled([base.removeAccountChangeListener(baseCoreId), base.removeAccountChangeListener(baseLiveId), router.removeAccountChangeListener(routerLiveId), er.removeAccountChangeListener(erLiveId)]);
   };
+  stop.refresh = refresh;
+  return stop;
 }
 
 export async function waitForBaseSettlement(core: PublicKey, predicate: (data: Buffer) => boolean, timeoutMs = 60_000): Promise<Buffer> {
